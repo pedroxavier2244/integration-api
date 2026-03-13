@@ -41,6 +41,12 @@ coverage.xml
 *.log
 logs/
 
+# Banco de dados local (testes)
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
 # OS
 .DS_Store
 Thumbs.db
