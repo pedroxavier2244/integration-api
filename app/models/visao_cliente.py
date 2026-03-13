@@ -4,7 +4,7 @@ Model ORM para a tabela final_visao_cliente.
 Tabela READ-ONLY para a Integration API — quem escreve nela é o ETL (implementation).
 Todas as colunas são TEXT, espelhando exatamente o schema do banco na VPS.
 """
-from sqlalchemy import Text
+from sqlalchemy import Float, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -75,6 +75,12 @@ class VisaoCliente(Base):
     elegivel_c6: Mapped[str | None] = mapped_column(Text, nullable=True)
     safra_maquina: Mapped[str | None] = mapped_column(Text, nullable=True)
     idade_safra_maquina: Mapped[str | None] = mapped_column(Text, nullable=True)
+    metrica_ativacao: Mapped[float | None] = mapped_column(Float, nullable=True)
+    metrica_progresso: Mapped[float | None] = mapped_column(Float, nullable=True)
+    metrica_urgencia: Mapped[float | None] = mapped_column(Float, nullable=True)
+    metrica_financeiro: Mapped[float | None] = mapped_column(Float, nullable=True)
+    metrica_intencao: Mapped[float | None] = mapped_column(Float, nullable=True)
+    score_perfil: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # ─── Boleto / Cobrança ────────────────────────────────────────────────────
     fl_propensao_bolcob: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -300,6 +300,12 @@ class TestClientesCompleteEndpoint:
             rf_capital_social="1000,00",
             rf_porte_empresa="01",
             rf_data_inicio_ativ="20240101",
+            metrica_ativacao=0.15,
+            metrica_progresso=0.35,
+            metrica_urgencia=0.20,
+            metrica_financeiro=0.05,
+            metrica_intencao=0.10,
+            score_perfil=0.85,
         )
 
         resp = await client.get(
@@ -324,6 +330,12 @@ class TestClientesCompleteEndpoint:
         assert data["items"][0]["capital_social"] == "1000,00"
         assert data["items"][0]["porte"] == "01"
         assert data["items"][0]["data_inicio_ativ"] == "20240101"
+        assert data["items"][0]["metrica_ativacao"] == 0.15
+        assert data["items"][0]["metrica_progresso"] == 0.35
+        assert data["items"][0]["metrica_urgencia"] == 0.2
+        assert data["items"][0]["metrica_financeiro"] == 0.05
+        assert data["items"][0]["metrica_intencao"] == 0.1
+        assert data["items"][0]["score_perfil"] == 0.85
         assert data["items"][0]["data_source"] == "final_visao_cliente"
 
     async def test_list_clientes_completo_by_nome(

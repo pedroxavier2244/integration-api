@@ -126,6 +126,12 @@ class ClienteDetailResponse(BaseModel):
     elegivel_c6: Optional[str] = None
     safra_maquina: Optional[str] = None
     idade_safra_maquina: Optional[str] = None
+    metrica_ativacao: Optional[float] = None
+    metrica_progresso: Optional[float] = None
+    metrica_urgencia: Optional[float] = None
+    metrica_financeiro: Optional[float] = None
+    metrica_intencao: Optional[float] = None
+    score_perfil: Optional[float] = None
     fl_propensao_bolcob: Optional[str] = None
     tpv_bolcob_potencial: Optional[str] = None
     fl_bolcob_cadastrado: Optional[str] = None
