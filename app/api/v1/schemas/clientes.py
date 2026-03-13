@@ -207,11 +207,73 @@ class ClienteDetailResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ClienteConsultaItemResponse(ClienteDetailResponse):
+    """Resposta detalhada no formato consumido pela busca operacional."""
+
+    @computed_field
+    @property
+    def nome_fantasia(self) -> Optional[str]:
+        return self.rf_nome_fantasia
+
+    @computed_field
+    @property
+    def situacao_cadastral(self) -> Optional[str]:
+        return self.rf_situacao_cadastral
+
+    @computed_field
+    @property
+    def descricao_situacao(self) -> Optional[str]:
+        return None
+
+    @computed_field
+    @property
+    def cnae_fiscal(self) -> Optional[str]:
+        return self.rf_cnae_principal
+
+    @computed_field
+    @property
+    def cnae_descricao(self) -> Optional[str]:
+        return None
+
+    @computed_field
+    @property
+    def natureza_juridica(self) -> Optional[str]:
+        return self.rf_natureza_juridica
+
+    @computed_field
+    @property
+    def capital_social(self) -> Optional[str]:
+        return self.rf_capital_social
+
+    @computed_field
+    @property
+    def porte(self) -> Optional[str]:
+        return self.rf_porte_empresa
+
+    @computed_field
+    @property
+    def data_inicio_ativ(self) -> Optional[str]:
+        return self.rf_data_inicio_ativ
+
+    @computed_field
+    @property
+    def data_source(self) -> str:
+        return "final_visao_cliente"
+
+
 class ClienteListResponse(BaseModel):
     items: List[ClienteResumoResponse]
     total: int
     page: int
     page_size: int
+
+
+class ClienteConsultaResponse(BaseModel):
+    documento_consultado: Optional[str] = None
+    total: int
+    limit: int
+    offset: int
+    items: List[ClienteConsultaItemResponse]
 
 
 class EmpresaResponse(BaseModel):

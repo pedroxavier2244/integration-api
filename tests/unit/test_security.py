@@ -1,5 +1,5 @@
 """
-Testes unitários para app.core.security.
+Testes unitarios para app.core.security.
 
 Cobre: hash/verify password, create/decode access token,
 create/decode refresh token, create/decode email token.
@@ -22,8 +22,6 @@ from app.api.v1.schemas.users import UserRole
 from app.core.config import settings
 
 
-# ─── hash_password / verify_password ──────────────────────────────────────────
-
 class TestPasswordHashing:
     def test_hash_returns_string(self):
         result = hash_password("mypassword")
@@ -41,15 +39,13 @@ class TestPasswordHashing:
     def test_same_password_different_hashes(self):
         h1 = hash_password("same")
         h2 = hash_password("same")
-        assert h1 != h2  # bcrypt usa salt aleatório
+        assert h1 != h2
 
     def test_empty_password(self):
         hashed = hash_password("")
         assert verify_password("", hashed) is True
         assert verify_password("notempty", hashed) is False
 
-
-# ─── create_access_token / decode_access_token ────────────────────────────────
 
 class TestAccessToken:
     def test_create_returns_string(self):
@@ -100,8 +96,6 @@ class TestAccessToken:
         assert p1["jti"] != p2["jti"]
 
 
-# ─── create_refresh_token / decode_refresh_token ──────────────────────────────
-
 class TestRefreshToken:
     def test_create_returns_string(self):
         token = create_refresh_token("user-123")
@@ -123,15 +117,9 @@ class TestRefreshToken:
 
     def test_refresh_token_not_valid_as_access(self):
         refresh = create_refresh_token("user-123")
-        # decode_access_token vai falhar pois falta campo 'sub' válido com permissions
-        # ou vai retornar payload sem permissions (field validation error)
-        with pytest.raises(Exception):
-            payload = decode_access_token(refresh)
-            # Se não lançar, deve falhar por permissions ausente
-            assert payload.permissions is not None
+        with pytest.raises(UnauthorizedException):
+            decode_access_token(refresh)
 
-
-# ─── create_email_token / decode_email_token ──────────────────────────────────
 
 class TestEmailToken:
     def test_create_invite_token(self):

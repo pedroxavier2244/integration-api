@@ -42,10 +42,11 @@ class AuthService:
                 user_email=email,
                 ip_address=ip,
                 user_agent=user_agent,
+                independent_transaction=True,
             )
             raise UnauthorizedException(
                 code="AUTH_INVALID_CREDENTIALS",
-                message="Email ou senha inválidos.",
+                message="Email ou senha invalidos.",
             )
 
         if not user.hashed_password or not verify_password(password, user.hashed_password):
@@ -54,10 +55,11 @@ class AuthService:
                 user_email=email,
                 ip_address=ip,
                 user_agent=user_agent,
+                independent_transaction=True,
             )
             raise UnauthorizedException(
                 code="AUTH_INVALID_CREDENTIALS",
-                message="Email ou senha inválidos.",
+                message="Email ou senha invalidos.",
             )
 
         await repo.update_last_login(user.id)
@@ -99,14 +101,14 @@ class AuthService:
         if rt is None or rt.is_revoked or rt.expires_at.replace(tzinfo=timezone.utc) < now:
             raise UnauthorizedException(
                 code="AUTH_INVALID_TOKEN",
-                message="Refresh token inválido ou expirado.",
+                message="Refresh token invalido ou expirado.",
             )
 
         user = await repo.get_by_id(user_id)
         if not user or not user.is_active:
             raise UnauthorizedException(
                 code="AUTH_INVALID_CREDENTIALS",
-                message="Usuário inativo.",
+                message="Usuario inativo.",
             )
 
         access = create_access_token(user.id, user.email, user.role)
@@ -129,7 +131,7 @@ class AuthService:
         repo = UserRepository(self.db)
         user = await repo.get_by_email(email)
         if user is None or not user.is_active:
-            return  # silencioso — não vazar existência do email
+            return  # silencioso - nao vazar existencia do email
 
         token = create_email_token(user.id, "reset")
         token_hash = hashlib.sha256(token.encode()).hexdigest()
@@ -158,7 +160,7 @@ class AuthService:
         if rt is None or rt.used or rt.expires_at.replace(tzinfo=timezone.utc) < now:
             raise UnauthorizedException(
                 code="AUTH_TOKEN_EXPIRED",
-                message="Token expirado ou já utilizado.",
+                message="Token expirado ou ja utilizado.",
             )
 
         await repo.set_password(user_id, hash_password(new_password))
@@ -186,7 +188,7 @@ class AuthService:
         if rt is None or rt.used or rt.expires_at.replace(tzinfo=timezone.utc) < now:
             raise UnauthorizedException(
                 code="AUTH_TOKEN_EXPIRED",
-                message="Convite expirado ou já utilizado. Solicite um novo convite.",
+                message="Convite expirado ou ja utilizado. Solicite um novo convite.",
             )
 
         await repo.set_password(user_id, hash_password(new_password))
@@ -202,8 +204,23 @@ class AuthService:
     async def validate_token(self, token: str, expected_type: str) -> dict:
         try:
             user_id = decode_email_token(token, expected_type)
-            user = await UserRepository(self.db).get_by_id(user_id)
-            return {"valid": True, "email": user.email if user else None, "type": expected_type}
+            token_hash = hashlib.sha256(token.encode()).hexdigest()
+            repo = UserRepository(self.db)
+            reset_token = await repo.get_reset_token(token_hash)
+            now = datetime.now(timezone.utc)
+
+            if (
+                reset_token is None
+                or reset_token.used
+                or reset_token.expires_at.replace(tzinfo=timezone.utc) < now
+            ):
+                return {"valid": False, "email": None, "type": None}
+
+            user = await repo.get_by_id(user_id)
+            if not user or not user.is_active:
+                return {"valid": False, "email": None, "type": None}
+
+            return {"valid": True, "email": user.email, "type": expected_type}
         except Exception:
             return {"valid": False, "email": None, "type": None}
 
@@ -212,7 +229,7 @@ class AuthService:
         if not user or not user.is_active:
             raise UnauthorizedException(
                 code="AUTH_INVALID_CREDENTIALS",
-                message="Usuário não encontrado ou inativo.",
+                message="Usuario nao encontrado ou inativo.",
             )
         return MeResponse(
             id=user.id,

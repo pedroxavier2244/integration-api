@@ -7,7 +7,7 @@ Quem popula é o ETL (implementation).
 from typing import Optional, List, Tuple
 from datetime import date
 
-from sqlalchemy import select, func, cast, Numeric, or_
+from sqlalchemy import select, func, cast, Numeric, or_, and_, not_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.visao_cliente import VisaoCliente
@@ -16,6 +16,42 @@ from app.models.visao_cliente import VisaoCliente
 class VisaoClienteRepository:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
+
+    @staticmethod
+    def _contains(column, value: str):
+        pattern = f"%{value.strip().upper()}%"
+        return func.upper(func.coalesce(column, "")).like(pattern)
+
+    @staticmethod
+    def _safra_condition(value: str):
+        pattern = f"%{value.strip()}%"
+        return or_(
+            VisaoCliente.safra_maquina.ilike(pattern),
+            VisaoCliente.safra_boleto.ilike(pattern),
+        )
+
+    @staticmethod
+    def _boletos_condition(value: str):
+        pattern = f"%{value.strip()}%"
+        return or_(
+            VisaoCliente.fl_bolcob_cadastrado.ilike(pattern),
+            VisaoCliente.qtd_bolcob_emtd_mtd.ilike(pattern),
+            VisaoCliente.vl_bolcob_emtd_mtd.ilike(pattern),
+            VisaoCliente.qtd_bolcob_liq_mtd.ilike(pattern),
+            VisaoCliente.vl_bolcob_liq_mtd.ilike(pattern),
+            VisaoCliente.safra_boleto.ilike(pattern),
+        )
+
+    @staticmethod
+    def _never_qualificou_condition():
+        ja_recebeu_upper = func.upper(func.coalesce(VisaoCliente.ja_recebeu_comissao, ""))
+        return and_(
+            ja_recebeu_upper.in_(["NAO", "NÃO", "NÃƒO"]),
+            or_(
+                VisaoCliente.fl_qualificado_comiss.is_(None),
+                not_(VisaoCliente.fl_qualificado_comiss.in_(["1", "1.0"])),
+            ),
+        )
 
     # ─── Busca individual ─────────────────────────────────────────────────────
 
@@ -56,23 +92,95 @@ class VisaoClienteRepository:
     async def search(
         self,
         q: Optional[str] = None,
+        cnpj: Optional[str] = None,
+        nome: Optional[str] = None,
+        safra: Optional[str] = None,
+        safra_maquina: Optional[str] = None,
+        nunca_qualificou: Optional[bool] = None,
+        comissao_prox_mes: Optional[str] = None,
+        apuracao_comiss: Optional[str] = None,
+        criterios_atingidos_comiss: Optional[str] = None,
+        chaves_pix_forte: Optional[str] = None,
+        cancelamento_maq: Optional[str] = None,
+        m2_dias_faltantes: Optional[str] = None,
+        boletos: Optional[str] = None,
+        fl_bolcob_cadastrado: Optional[str] = None,
+        criterio_proximo: Optional[str] = None,
         page: int = 1,
         page_size: int = 20,
+        offset: Optional[int] = None,
+        limit: Optional[int] = None,
     ) -> Tuple[List[VisaoCliente], int]:
         """Busca por CPF/CNPJ ou nome."""
         query = select(VisaoCliente)
         count_q = select(func.count()).select_from(VisaoCliente)
+        filters = []
 
         if q:
-            pattern = f"%{q.upper()}%"
             condition = or_(
                 VisaoCliente.cd_cpf_cnpj_cliente.ilike(f"%{q}%"),
-                func.upper(VisaoCliente.nome_cliente).like(pattern),
+                self._contains(VisaoCliente.nome_cliente, q),
             )
-            query = query.where(condition)
-            count_q = count_q.where(condition)
+            filters.append(condition)
 
-        query = query.order_by(VisaoCliente.nome_cliente).offset((page - 1) * page_size).limit(page_size)
+        if cnpj:
+            filters.append(VisaoCliente.cd_cpf_cnpj_cliente.ilike(f"%{cnpj.strip()}%"))
+
+        if nome:
+            filters.append(self._contains(VisaoCliente.nome_cliente, nome))
+
+        if safra:
+            filters.append(self._safra_condition(safra))
+
+        if safra_maquina:
+            filters.append(self._contains(VisaoCliente.safra_maquina, safra_maquina))
+
+        if nunca_qualificou is not None:
+            condition = self._never_qualificou_condition()
+            filters.append(condition if nunca_qualificou else not_(condition))
+
+        if comissao_prox_mes:
+            filters.append(self._contains(VisaoCliente.comissao_prox_mes, comissao_prox_mes))
+
+        if apuracao_comiss:
+            filters.append(self._contains(VisaoCliente.apuracao_comiss, apuracao_comiss))
+
+        if criterios_atingidos_comiss:
+            filters.append(
+                self._contains(
+                    VisaoCliente.criterios_atingidos_comiss,
+                    criterios_atingidos_comiss,
+                )
+            )
+
+        if chaves_pix_forte:
+            filters.append(self._contains(VisaoCliente.chaves_pix_forte, chaves_pix_forte))
+
+        if cancelamento_maq:
+            filters.append(self._contains(VisaoCliente.cancelamento_maq, cancelamento_maq))
+
+        if m2_dias_faltantes:
+            filters.append(self._contains(VisaoCliente.m2_dias_faltantes, m2_dias_faltantes))
+
+        if boletos:
+            filters.append(self._boletos_condition(boletos))
+
+        if fl_bolcob_cadastrado:
+            filters.append(
+                self._contains(VisaoCliente.fl_bolcob_cadastrado, fl_bolcob_cadastrado)
+            )
+
+        if criterio_proximo:
+            filters.append(self._contains(VisaoCliente.criterio_proximo, criterio_proximo))
+
+        if filters:
+            query = query.where(*filters)
+            count_q = count_q.where(*filters)
+
+        resolved_offset = offset if offset is not None else (page - 1) * page_size
+        resolved_limit = limit if limit is not None else page_size
+
+        query = query.order_by(VisaoCliente.nome_cliente).offset(resolved_offset).limit(resolved_limit)
 
         result = await self.db.execute(query)
         items = list(result.scalars().all())

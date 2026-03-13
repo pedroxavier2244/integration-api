@@ -16,11 +16,14 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.schemas.audit import AuditAction
+from app.models.audit_log import AuditLog
 from app.models.user import User, UserRole
 from app.models.password_reset_token import PasswordResetToken
-from app.core.security import hash_password, create_email_token
+from app.core.security import hash_password, create_email_token, create_refresh_token
 
 
 BASE = "/api/v1/auth"
@@ -47,6 +50,25 @@ class TestLoginEndpoint:
             "password": "WrongPass",
         })
         assert resp.status_code == 401
+
+    async def test_login_wrong_password_persists_audit_log(
+        self,
+        client: AsyncClient,
+        db: AsyncSession,
+        admin_user: User,
+    ):
+        resp = await client.post(f"{BASE}/login", json={
+            "email": "admin@test.com",
+            "password": "WrongPass",
+        })
+        assert resp.status_code == 401
+
+        result = await db.execute(
+            select(AuditLog).where(AuditLog.action == AuditAction.login_failed.value)
+        )
+        audit_log = result.scalar_one_or_none()
+        assert audit_log is not None
+        assert audit_log.user_email == "admin@test.com"
 
     async def test_login_unknown_email(self, client: AsyncClient):
         resp = await client.post(f"{BASE}/login", json={
@@ -130,6 +152,14 @@ class TestMeEndpoint:
         resp = await client.get(
             f"{BASE}/me",
             headers={"Authorization": "Bearer invalid.token"},
+        )
+        assert resp.status_code == 401
+
+    async def test_get_me_with_refresh_token_returns_401(self, client: AsyncClient):
+        refresh_token = create_refresh_token("user-123")
+        resp = await client.get(
+            f"{BASE}/me",
+            headers={"Authorization": f"Bearer {refresh_token}"},
         )
         assert resp.status_code == 401
 
@@ -281,6 +311,32 @@ class TestValidateTokenEndpoint:
             f"{BASE}/validate-token",
             json={"token": "invalid.token.here"},
             params={"type": "invite"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["valid"] is False
+
+    async def test_validate_used_token_returns_false(
+        self,
+        client: AsyncClient,
+        db: AsyncSession,
+        admin_user: User,
+    ):
+        token = create_email_token(admin_user.id, "reset")
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        rt = PasswordResetToken(
+            user_id=admin_user.id,
+            token_hash=token_hash,
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            used=True,
+        )
+        db.add(rt)
+        await db.flush()
+
+        resp = await client.post(
+            f"{BASE}/validate-token",
+            json={"token": token},
+            params={"type": "reset"},
         )
         assert resp.status_code == 200
         data = resp.json()

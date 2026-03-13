@@ -45,7 +45,7 @@ class TestAuthServiceLogin:
                 ip="127.0.0.1",
                 user_agent="pytest",
             )
-        assert "inválidos" in exc_info.value.message
+        assert exc_info.value.code == "AUTH_INVALID_CREDENTIALS"
 
     async def test_login_unknown_email(self, db: AsyncSession):
         svc = AuthService(db)
@@ -284,6 +284,22 @@ class TestAuthServiceValidateToken:
     async def test_validate_invalid_token(self, db: AsyncSession):
         svc = AuthService(db)
         result = await svc.validate_token("invalid.token", "invite")
+        assert result["valid"] is False
+
+    async def test_validate_consumed_token(self, db: AsyncSession, admin_user: User):
+        token = create_email_token(admin_user.id, "reset")
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        rt = PasswordResetToken(
+            user_id=admin_user.id,
+            token_hash=token_hash,
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            used=True,
+        )
+        db.add(rt)
+        await db.flush()
+
+        svc = AuthService(db)
+        result = await svc.validate_token(token, "reset")
         assert result["valid"] is False
 
     async def test_validate_wrong_type(self, db: AsyncSession, admin_user: User):

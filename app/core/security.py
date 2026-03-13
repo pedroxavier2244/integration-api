@@ -4,6 +4,7 @@ from typing import Optional
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+from pydantic import ValidationError
 
 from app.core.config import settings
 from app.core.exceptions import UnauthorizedException
@@ -52,18 +53,21 @@ def decode_access_token(token: str) -> TokenPayload:
     try:
         payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
         return TokenPayload(**payload)
-    except JWTError:
-        raise UnauthorizedException(code="AUTH_INVALID_TOKEN", message="Token inválido ou expirado.")
+    except (JWTError, ValidationError, KeyError, TypeError):
+        raise UnauthorizedException(code="AUTH_INVALID_TOKEN", message="Token invalido ou expirado.")
 
 
 def decode_refresh_token(token: str) -> str:
     try:
         payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
         if payload.get("type") != "refresh":
-            raise UnauthorizedException(code="AUTH_INVALID_TOKEN", message="Token inválido.")
-        return payload["sub"]
-    except JWTError:
-        raise UnauthorizedException(code="AUTH_INVALID_TOKEN", message="Refresh token inválido ou expirado.")
+            raise UnauthorizedException(code="AUTH_INVALID_TOKEN", message="Token invalido.")
+        user_id = payload["sub"]
+        if not isinstance(user_id, str) or not user_id:
+            raise UnauthorizedException(code="AUTH_INVALID_TOKEN", message="Token invalido.")
+        return user_id
+    except (JWTError, ValidationError, KeyError, TypeError):
+        raise UnauthorizedException(code="AUTH_INVALID_TOKEN", message="Refresh token invalido ou expirado.")
 
 
 def create_email_token(user_id: str, token_type: str) -> str:
@@ -82,7 +86,10 @@ def decode_email_token(token: str, expected_type: str) -> str:
     try:
         payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
         if payload.get("type") != expected_type:
-            raise UnauthorizedException(code="AUTH_INVALID_TOKEN", message="Token inválido para esta operação.")
-        return payload["sub"]
-    except JWTError:
-        raise UnauthorizedException(code="AUTH_TOKEN_EXPIRED", message="Token expirado ou inválido. Solicite um novo link.")
+            raise UnauthorizedException(code="AUTH_INVALID_TOKEN", message="Token invalido para esta operacao.")
+        user_id = payload["sub"]
+        if not isinstance(user_id, str) or not user_id:
+            raise UnauthorizedException(code="AUTH_INVALID_TOKEN", message="Token invalido para esta operacao.")
+        return user_id
+    except (JWTError, ValidationError, KeyError, TypeError):
+        raise UnauthorizedException(code="AUTH_TOKEN_EXPIRED", message="Token expirado ou invalido. Solicite um novo link.")
