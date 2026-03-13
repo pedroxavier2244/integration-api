@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Bem-vindo</title>
+</head>
+<body style="font-family: Arial, sans-serif; background: #f5f5f5; margin: 0; padding: 0;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding: 40px 0;">
+    <tr>
+      <td align="center">
+        <table width="560" cellpadding="0" cellspacing="0" style="background: #ffffff; border-radius: 8px; padding: 40px;">
+          <tr>
+            <td>
+              <h2 style="color: #1a1a1a; margin-top: 0;">Bem-vindo, {{ full_name }}!</h2>
+              <p style="color: #444; line-height: 1.6;">
+                Sua conta foi criada. Clique no botão abaixo para definir sua senha de acesso.
+              </p>
+              <p style="text-align: center; margin: 32px 0;">
+                <a href="{{ link }}"
+                   style="background: #2563eb; color: #ffffff; text-decoration: none;
+                          padding: 14px 32px; border-radius: 6px; font-size: 15px; font-weight: bold;">
+                  Definir minha senha
+                </a>
+              </p>
+              <p style="color: #888; font-size: 13px;">
+                Este link expira em {{ expires_hours }} horas. Se não solicitou este acesso, ignore este email.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
