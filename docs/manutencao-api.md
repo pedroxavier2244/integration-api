@@ -60,6 +60,8 @@ Consequencia operacional importante:
 - `etl_file`
 - `etl_job_run`
 - `etl_job_step`
+- `etl_bad_rows`
+- `visao_cliente_change_history`
 
 ### 3.2 Tabelas proprias da Integration API
 
@@ -72,7 +74,7 @@ Consequencia operacional importante:
 
 ### 3.3 Regra de ownership
 
-- `final_visao_cliente` e `staging_visao_cliente` pertencem ao ETL.
+- `final_visao_cliente`, `staging_visao_cliente` e `visao_cliente_change_history` pertencem ao ETL.
 - As tabelas de autenticacao, auditoria e CRM pertencem a esta API.
 
 ## 4. Rotas expostas
@@ -107,6 +109,7 @@ Consequencia operacional importante:
 - `GET /api/v1/clientes/indicadores`
 - `GET /api/v1/clientes`
 - `GET /api/v1/clientes/completo`
+- `GET /api/v1/clientes/historico-alteracoes`
 - `GET /api/v1/clientes/{cd_cpf_cnpj}`
 
 ### 4.5 Empresas
@@ -368,6 +371,9 @@ A tabela `audit_logs` registra eventos como:
 ### 12.1 Tabela de clientes
 
 O endpoint `/clientes/completo` espelha `final_visao_cliente` e acrescenta aliases calculados.
+
+O endpoint `/clientes/historico-alteracoes` le a tabela `visao_cliente_change_history`,
+gravada pelo ETL, para devolver a trilha persistida de inserts e updates por documento.
 
 ### 12.2 Tipagem real
 

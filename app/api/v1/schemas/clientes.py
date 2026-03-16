@@ -1,6 +1,6 @@
 from pydantic import BaseModel, computed_field
 from typing import Optional, List
-from datetime import date
+from datetime import date, datetime
 
 
 class IndicadoresResponse(BaseModel):
@@ -280,6 +280,28 @@ class ClienteConsultaResponse(BaseModel):
     limit: int
     offset: int
     items: List[ClienteConsultaItemResponse]
+
+
+class ClienteHistoricoAlteracaoItemResponse(BaseModel):
+    id: int
+    data_base: Optional[str] = None
+    changed_at: Optional[datetime] = None
+    etl_job_id: Optional[str] = None
+    file_id: Optional[str] = None
+    file_date: Optional[date] = None
+    filename: Optional[str] = None
+    change_type: str
+    field_name: Optional[str] = None
+    old_value: Optional[str] = None
+    new_value: Optional[str] = None
+
+
+class ClienteHistoricoAlteracoesResponse(BaseModel):
+    documento_consultado: str
+    total: int
+    limit: int
+    offset: int
+    items: List[ClienteHistoricoAlteracaoItemResponse]
 
 
 class EmpresaResponse(BaseModel):

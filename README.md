@@ -30,6 +30,7 @@ Esta API atua sobre o banco compartilhado com o ETL (`etl_db`) e expoe:
 - `POST /api/v1/auth/login`
 - `GET /api/v1/clientes`
 - `GET /api/v1/clientes/completo`
+- `GET /api/v1/clientes/historico-alteracoes`
 - `GET /api/v1/clientes/{cd_cpf_cnpj}`
 - `GET /api/v1/empresas`
 - `POST /api/v1/crm/inbound/events`
@@ -39,6 +40,7 @@ Esta API atua sobre o banco compartilhado com o ETL (`etl_db`) e expoe:
 
 - A fonte principal dos dados de negocio e a tabela `public.final_visao_cliente`.
 - A API trata `final_visao_cliente` como read-only.
+- O historico persistido de alteracoes vem de `public.visao_cliente_change_history`, tambem de ownership do ETL.
 - Em ambiente de VPS, o deploy de referencia usa `docker compose -f docker-compose.vps.yml up -d --build`.
 - A documentacao Swagger fica disponivel em `/docs` quando `DEBUG=true`.
 - O endpoint `GET /api/v1/clientes/completo` e o contrato principal para consultas operacionais ricas por documento, nome e filtros de negocio.

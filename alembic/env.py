@@ -45,6 +45,9 @@ EXCLUDE_TABLES = {
     "staging_visao_cliente",
     "etl_file",
     "etl_job_run",
+    "etl_job_step",
+    "etl_bad_rows",
+    "visao_cliente_change_history",
     "cnpj_rf_cache",
     "cnpj_divergencia",
 }

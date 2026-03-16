@@ -10,7 +10,9 @@ from datetime import date
 from sqlalchemy import select, func, cast, Numeric, or_, and_, not_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.etl_file import EtlFile
 from app.models.visao_cliente import VisaoCliente
+from app.models.visao_cliente_change_history import VisaoClienteChangeHistory
 
 
 class VisaoClienteRepository:
@@ -63,6 +65,50 @@ class VisaoClienteRepository:
             )
         )
         return result.scalar_one_or_none()
+
+    async def get_change_history(
+        self,
+        documento: str,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> Tuple[list[dict], int]:
+        query = (
+            select(
+                VisaoClienteChangeHistory.id,
+                VisaoClienteChangeHistory.data_base,
+                VisaoClienteChangeHistory.changed_at,
+                VisaoClienteChangeHistory.etl_job_id,
+                VisaoClienteChangeHistory.file_id,
+                EtlFile.file_date,
+                EtlFile.filename,
+                VisaoClienteChangeHistory.change_type,
+                VisaoClienteChangeHistory.field_name,
+                VisaoClienteChangeHistory.old_value,
+                VisaoClienteChangeHistory.new_value,
+            )
+            .select_from(VisaoClienteChangeHistory)
+            .outerjoin(EtlFile, EtlFile.id == VisaoClienteChangeHistory.file_id)
+            .where(VisaoClienteChangeHistory.documento == documento)
+            .order_by(
+                VisaoClienteChangeHistory.changed_at.asc().nulls_last(),
+                VisaoClienteChangeHistory.id.asc(),
+            )
+            .offset(offset)
+            .limit(limit)
+        )
+        count_query = (
+            select(func.count())
+            .select_from(VisaoClienteChangeHistory)
+            .where(VisaoClienteChangeHistory.documento == documento)
+        )
+
+        result = await self.db.execute(query)
+        items = [dict(row) for row in result.mappings().all()]
+
+        count_result = await self.db.execute(count_query)
+        total = count_result.scalar_one()
+
+        return items, total
 
     async def search_by_name(
         self,

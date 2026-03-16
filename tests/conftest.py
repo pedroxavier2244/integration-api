@@ -30,7 +30,9 @@ from app.models.refresh_token import RefreshToken  # noqa: E402
 from app.models.password_reset_token import PasswordResetToken  # noqa: E402
 from app.models.audit_log import AuditLog  # noqa: E402
 from app.models.crm_event import CrmInboundEvent, CrmOutboundJob  # noqa: E402
+from app.models.etl_file import EtlFile  # noqa: E402
 from app.models.visao_cliente import VisaoCliente  # noqa: E402
+from app.models.visao_cliente_change_history import VisaoClienteChangeHistory  # noqa: E402
 from app.core.security import hash_password, create_access_token  # noqa: E402
 from app.db.session import get_db  # noqa: E402
 from app.main import app  # noqa: E402

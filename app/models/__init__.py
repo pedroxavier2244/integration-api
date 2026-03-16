@@ -4,7 +4,9 @@ from app.models.refresh_token import RefreshToken
 from app.models.password_reset_token import PasswordResetToken
 from app.models.audit_log import AuditLog
 from app.models.crm_event import CrmInboundEvent, CrmOutboundJob
+from app.models.etl_file import EtlFile
 from app.models.visao_cliente import VisaoCliente
+from app.models.visao_cliente_change_history import VisaoClienteChangeHistory
 
 __all__ = [
     "Base",
@@ -14,5 +16,7 @@ __all__ = [
     "AuditLog",
     "CrmInboundEvent",
     "CrmOutboundJob",
+    "EtlFile",
     "VisaoCliente",
+    "VisaoClienteChangeHistory",
 ]

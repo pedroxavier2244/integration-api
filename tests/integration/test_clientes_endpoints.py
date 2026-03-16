@@ -3,15 +3,20 @@ Testes de integração para os endpoints de clientes e empresas.
 
 GET /api/v1/clientes/indicadores
 GET /api/v1/clientes/
+GET /api/v1/clientes/historico-alteracoes
 GET /api/v1/clientes/{cd_cpf_cnpj}
 GET /api/v1/empresas/
 GET /api/v1/empresas/{cd_cpf_cnpj}
 """
+from datetime import date, datetime, timezone
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.etl_file import EtlFile
 from app.models.visao_cliente import VisaoCliente
+from app.models.visao_cliente_change_history import VisaoClienteChangeHistory
 
 
 BASE_CLIENTES = "/api/v1/clientes"
@@ -428,6 +433,85 @@ class TestClientesCompleteEndpoint:
     async def test_list_clientes_completo_without_auth(self, client: AsyncClient):
         resp = await client.get(f"{BASE_CLIENTES}/completo?nome=MARIA")
         assert resp.status_code == 403
+
+
+class TestClientesHistoricoAlteracoesEndpoint:
+    async def test_get_historico_alteracoes_success(
+        self,
+        client: AsyncClient,
+        db: AsyncSession,
+        admin_token: str,
+    ):
+        db.add(
+            EtlFile(
+                id="file-1",
+                filename="Relatorio de Producao 19.02.26.xlsx",
+                file_date=date(2026, 2, 19),
+            )
+        )
+        db.add_all(
+            [
+                VisaoClienteChangeHistory(
+                    id=1,
+                    documento="12345678000195",
+                    etl_job_id="job-1",
+                    file_id="file-1",
+                    data_base="2026-02-19",
+                    change_type="INSERT",
+                    field_name=None,
+                    old_value=None,
+                    new_value=None,
+                    changed_at=datetime(2026, 2, 19, 12, 0, tzinfo=timezone.utc),
+                ),
+                VisaoClienteChangeHistory(
+                    id=2,
+                    documento="12345678000195",
+                    etl_job_id="job-2",
+                    file_id="file-1",
+                    data_base="2026-03-04",
+                    change_type="UPDATE",
+                    field_name="criterio_proximo",
+                    old_value="CASH IN",
+                    new_value="SPENDING",
+                    changed_at=datetime(2026, 3, 4, 14, 30, tzinfo=timezone.utc),
+                ),
+            ]
+        )
+        await db.flush()
+
+        resp = await client.get(
+            f"{BASE_CLIENTES}/historico-alteracoes?documento=12.345.678/0001-95",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["documento_consultado"] == "12345678000195"
+        assert data["total"] == 2
+        assert data["limit"] == 100
+        assert data["offset"] == 0
+        assert len(data["items"]) == 2
+        assert data["items"][0]["change_type"] == "INSERT"
+        assert data["items"][0]["filename"] == "Relatorio de Producao 19.02.26.xlsx"
+        assert data["items"][1]["change_type"] == "UPDATE"
+        assert data["items"][1]["field_name"] == "criterio_proximo"
+        assert data["items"][1]["old_value"] == "CASH IN"
+        assert data["items"][1]["new_value"] == "SPENDING"
+
+    async def test_get_historico_alteracoes_requires_auth(self, client: AsyncClient):
+        resp = await client.get(f"{BASE_CLIENTES}/historico-alteracoes?documento=12345678000195")
+        assert resp.status_code == 403
+
+    async def test_get_historico_alteracoes_rejects_invalid_documento(
+        self,
+        client: AsyncClient,
+        admin_token: str,
+    ):
+        resp = await client.get(
+            f"{BASE_CLIENTES}/historico-alteracoes?documento=abc",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert resp.status_code == 400
 
 
 class TestClienteDetailEndpoint:

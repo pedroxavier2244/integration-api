@@ -1,12 +1,14 @@
+import re
 from datetime import date
 from typing import Optional
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import RequireClientesRead, get_current_user
 from app.api.v1.schemas.clientes import (
     ClienteResumoResponse, ClienteDetailResponse,
     ClienteConsultaItemResponse, ClienteConsultaResponse,
+    ClienteHistoricoAlteracaoItemResponse, ClienteHistoricoAlteracoesResponse,
     ClienteListResponse, IndicadoresResponse,
 )
 from app.api.v1.schemas.audit import AuditAction
@@ -16,6 +18,10 @@ from app.services.audit_service import AuditService
 from app.core.exceptions import NotFoundException
 
 router = APIRouter()
+
+
+def _only_digits(value: str) -> str:
+    return re.sub(r"[^0-9]", "", value or "")
 
 
 def _resolve_documento_consultado(
@@ -238,7 +244,51 @@ async def list_clientes_completo(
         offset=offset,
         items=[ClienteConsultaItemResponse.model_validate(i) for i in items],
     )
-        
+
+
+@router.get(
+    "/historico-alteracoes",
+    response_model=ClienteHistoricoAlteracoesResponse,
+    summary="Historico persistido de alteracoes do cliente",
+)
+async def get_cliente_historico_alteracoes(
+    documento: str = Query(..., description="CPF/CNPJ com ou sem pontuacao"),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    current_user=RequireClientesRead,
+):
+    documento_consultado = _only_digits(documento)
+    if not documento_consultado:
+        raise HTTPException(status_code=400, detail="documento invalido")
+
+    repo = VisaoClienteRepository(db)
+    items, total = await repo.get_change_history(
+        documento=documento_consultado,
+        limit=limit,
+        offset=offset,
+    )
+
+    await AuditService(db).log(
+        action=AuditAction.cliente_read,
+        user_id=current_user.sub,
+        resource="cliente_historico_alteracoes",
+        resource_id=documento_consultado,
+        payload={
+            "documento": documento,
+            "documento_normalizado": documento_consultado,
+            "limit": limit,
+            "offset": offset,
+        },
+    )
+
+    return ClienteHistoricoAlteracoesResponse(
+        documento_consultado=documento_consultado,
+        total=total,
+        limit=limit,
+        offset=offset,
+        items=[ClienteHistoricoAlteracaoItemResponse.model_validate(i) for i in items],
+    )
 
 
 @router.get("/{cd_cpf_cnpj}", response_model=ClienteDetailResponse, summary="Detalhe completo de cliente")
