@@ -1,26 +1,20 @@
 """
-Testes unitários para AuthService.
-
-Mocks: send_reset_password_email, send_invite_email, export_to_crm.delay
+Unit tests for AuthService.
 """
 import hashlib
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.auth_service import AuthService
-from app.core.security import (
-    hash_password,
-    create_refresh_token,
-    create_email_token,
-)
-from app.core.exceptions import UnauthorizedException
-from app.models.user import User, UserRole
-from app.models.refresh_token import RefreshToken
+from app.core.exceptions import ExternalServiceException, UnauthorizedException
+from app.core.security import create_email_token, create_refresh_token, hash_password
 from app.models.password_reset_token import PasswordResetToken
-from app.api.v1.schemas.auth import TokenPayload
+from app.models.refresh_token import RefreshToken
+from app.models.user import User, UserRole
+from app.services.auth_service import AuthService
 
 
 class TestAuthServiceLogin:
@@ -99,7 +93,12 @@ class TestAuthServiceLogin:
 
 
 class TestAuthServiceRefresh:
-    async def test_refresh_success(self, db: AsyncSession, admin_user: User, admin_refresh_token: str):
+    async def test_refresh_success(
+        self,
+        db: AsyncSession,
+        admin_user: User,
+        admin_refresh_token: str,
+    ):
         svc = AuthService(db)
         result = await svc.refresh(admin_refresh_token)
         assert result.access_token
@@ -107,13 +106,14 @@ class TestAuthServiceRefresh:
     async def test_refresh_revoked_token(self, db: AsyncSession, admin_user: User):
         raw_token = create_refresh_token(admin_user.id)
         token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
-        rt = RefreshToken(
-            user_id=admin_user.id,
-            token_hash=token_hash,
-            expires_at=datetime.now(timezone.utc) + timedelta(days=7),
-            is_revoked=True,
+        db.add(
+            RefreshToken(
+                user_id=admin_user.id,
+                token_hash=token_hash,
+                expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+                is_revoked=True,
+            )
         )
-        db.add(rt)
         await db.flush()
 
         svc = AuthService(db)
@@ -123,12 +123,13 @@ class TestAuthServiceRefresh:
     async def test_refresh_expired_token(self, db: AsyncSession, admin_user: User):
         raw_token = create_refresh_token(admin_user.id)
         token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
-        rt = RefreshToken(
-            user_id=admin_user.id,
-            token_hash=token_hash,
-            expires_at=datetime.now(timezone.utc) - timedelta(days=1),  # expirado
+        db.add(
+            RefreshToken(
+                user_id=admin_user.id,
+                token_hash=token_hash,
+                expires_at=datetime.now(timezone.utc) - timedelta(days=1),
+            )
         )
-        db.add(rt)
         await db.flush()
 
         svc = AuthService(db)
@@ -142,14 +143,16 @@ class TestAuthServiceRefresh:
 
 
 class TestAuthServiceLogout:
-    async def test_logout_revokes_token(self, db: AsyncSession, admin_user: User, admin_refresh_token: str):
+    async def test_logout_revokes_token(
+        self,
+        db: AsyncSession,
+        admin_user: User,
+        admin_refresh_token: str,
+    ):
         svc = AuthService(db)
-        # Should not raise
         await svc.logout(admin_refresh_token, admin_user.id)
 
-        # Verifica que foi revogado
         token_hash = hashlib.sha256(admin_refresh_token.encode()).hexdigest()
-        from sqlalchemy import select
         result = await db.execute(
             select(RefreshToken).where(RefreshToken.token_hash == token_hash)
         )
@@ -157,42 +160,85 @@ class TestAuthServiceLogout:
         assert rt is not None
         assert rt.is_revoked is True
 
+    async def test_logout_rejects_other_user_refresh_token(
+        self,
+        db: AsyncSession,
+        admin_user: User,
+        gestor_user: User,
+    ):
+        other_refresh = create_refresh_token(gestor_user.id)
+        token_hash = hashlib.sha256(other_refresh.encode()).hexdigest()
+        db.add(
+            RefreshToken(
+                user_id=gestor_user.id,
+                token_hash=token_hash,
+                expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+            )
+        )
+        await db.flush()
+
+        svc = AuthService(db)
+        with pytest.raises(UnauthorizedException) as exc_info:
+            await svc.logout(other_refresh, admin_user.id)
+        assert exc_info.value.code == "AUTH_INVALID_TOKEN"
+
 
 class TestAuthServiceForgotPassword:
     @patch("app.integrations.email_client.send_reset_password_email", new_callable=AsyncMock)
-    async def test_forgot_password_known_email(self, mock_send, db: AsyncSession, admin_user: User):
+    async def test_forgot_password_known_email(
+        self,
+        mock_send,
+        db: AsyncSession,
+        admin_user: User,
+    ):
         svc = AuthService(db)
-        # Não deve lançar
         await svc.forgot_password("admin@test.com")
         mock_send.assert_called_once()
 
     @patch("app.integrations.email_client.send_reset_password_email", new_callable=AsyncMock)
     async def test_forgot_password_unknown_email_silent(self, mock_send, db: AsyncSession):
         svc = AuthService(db)
-        # Silencioso — não revela existência do email
         await svc.forgot_password("naoexiste@test.com")
         mock_send.assert_not_called()
 
+    @patch(
+        "app.integrations.email_client.send_reset_password_email",
+        new_callable=AsyncMock,
+        side_effect=RuntimeError("smtp down"),
+    )
+    async def test_forgot_password_email_failure_raises_external_service_exception(
+        self,
+        mock_send,
+        db: AsyncSession,
+        admin_user: User,
+    ):
+        svc = AuthService(db)
+        with pytest.raises(ExternalServiceException) as exc_info:
+            await svc.forgot_password("admin@test.com")
+        assert exc_info.value.code == "EMAIL_DELIVERY_FAILED"
+        mock_send.assert_called_once()
+
 
 class TestAuthServiceResetPassword:
-    @patch("app.integrations.email_client.send_reset_password_email", new_callable=AsyncMock)
-    async def test_reset_password_success(self, mock_send, db: AsyncSession, admin_user: User):
-        # Gera e salva token de reset
+    async def test_reset_password_success(
+        self,
+        db: AsyncSession,
+        admin_user: User,
+    ):
         token = create_email_token(admin_user.id, "reset")
         token_hash = hashlib.sha256(token.encode()).hexdigest()
-        rt = PasswordResetToken(
-            user_id=admin_user.id,
-            token_hash=token_hash,
-            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        db.add(
+            PasswordResetToken(
+                user_id=admin_user.id,
+                token_hash=token_hash,
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            )
         )
-        db.add(rt)
         await db.flush()
 
         svc = AuthService(db)
         await svc.reset_password(token, "NewPassword@123")
 
-        # Verifica que a senha foi alterada
-        from sqlalchemy import select
         result = await db.execute(
             select(PasswordResetToken).where(PasswordResetToken.token_hash == token_hash)
         )
@@ -202,12 +248,13 @@ class TestAuthServiceResetPassword:
     async def test_reset_password_expired_token(self, db: AsyncSession, admin_user: User):
         token = create_email_token(admin_user.id, "reset")
         token_hash = hashlib.sha256(token.encode()).hexdigest()
-        rt = PasswordResetToken(
-            user_id=admin_user.id,
-            token_hash=token_hash,
-            expires_at=datetime.now(timezone.utc) - timedelta(hours=1),  # expirado
+        db.add(
+            PasswordResetToken(
+                user_id=admin_user.id,
+                token_hash=token_hash,
+                expires_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            )
         )
-        db.add(rt)
         await db.flush()
 
         svc = AuthService(db)
@@ -217,23 +264,43 @@ class TestAuthServiceResetPassword:
     async def test_reset_password_used_token(self, db: AsyncSession, admin_user: User):
         token = create_email_token(admin_user.id, "reset")
         token_hash = hashlib.sha256(token.encode()).hexdigest()
-        rt = PasswordResetToken(
-            user_id=admin_user.id,
-            token_hash=token_hash,
-            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
-            used=True,  # já utilizado
+        db.add(
+            PasswordResetToken(
+                user_id=admin_user.id,
+                token_hash=token_hash,
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+                used=True,
+            )
         )
-        db.add(rt)
         await db.flush()
 
         svc = AuthService(db)
         with pytest.raises(UnauthorizedException):
             await svc.reset_password(token, "NewPass@123")
 
+    async def test_reset_password_missing_user_raises_unauthorized(
+        self,
+        db: AsyncSession,
+    ):
+        token = create_email_token("missing-user", "reset")
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        db.add(
+            PasswordResetToken(
+                user_id="missing-user",
+                token_hash=token_hash,
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            )
+        )
+        await db.flush()
+
+        svc = AuthService(db)
+        with pytest.raises(UnauthorizedException) as exc_info:
+            await svc.reset_password(token, "NewPass@123")
+        assert exc_info.value.code == "AUTH_INVALID_TOKEN"
+
 
 class TestAuthServiceAcceptInvite:
     async def test_accept_invite_success(self, db: AsyncSession, admin_user: User):
-        # Usuário sem senha (simula usuário convidado)
         user = User(
             email="invited@test.com",
             full_name="Invited User",
@@ -246,19 +313,18 @@ class TestAuthServiceAcceptInvite:
 
         token = create_email_token(user.id, "invite")
         token_hash = hashlib.sha256(token.encode()).hexdigest()
-        rt = PasswordResetToken(
-            user_id=user.id,
-            token_hash=token_hash,
-            expires_at=datetime.now(timezone.utc) + timedelta(hours=48),
+        db.add(
+            PasswordResetToken(
+                user_id=user.id,
+                token_hash=token_hash,
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=48),
+            )
         )
-        db.add(rt)
         await db.flush()
 
         svc = AuthService(db)
         await svc.accept_invite(token, "MyPassword@123")
 
-        # Token deve estar marcado como usado
-        from sqlalchemy import select
         result = await db.execute(
             select(PasswordResetToken).where(PasswordResetToken.token_hash == token_hash)
         )
@@ -266,16 +332,45 @@ class TestAuthServiceAcceptInvite:
         assert saved_rt.used is True
 
     async def test_accept_invite_wrong_type(self, db: AsyncSession, admin_user: User):
-        """Token do tipo 'reset' não pode ser usado como 'invite'."""
         reset_token = create_email_token(admin_user.id, "reset")
         svc = AuthService(db)
         with pytest.raises(UnauthorizedException):
             await svc.accept_invite(reset_token, "pass")
 
+    async def test_accept_invite_missing_user_raises_unauthorized(
+        self,
+        db: AsyncSession,
+    ):
+        token = create_email_token("missing-user", "invite")
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        db.add(
+            PasswordResetToken(
+                user_id="missing-user",
+                token_hash=token_hash,
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=48),
+            )
+        )
+        await db.flush()
+
+        svc = AuthService(db)
+        with pytest.raises(UnauthorizedException) as exc_info:
+            await svc.accept_invite(token, "MyPassword@123")
+        assert exc_info.value.code == "AUTH_INVALID_TOKEN"
+
 
 class TestAuthServiceValidateToken:
     async def test_validate_valid_token(self, db: AsyncSession, admin_user: User):
         token = create_email_token(admin_user.id, "invite")
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        db.add(
+            PasswordResetToken(
+                user_id=admin_user.id,
+                token_hash=token_hash,
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=48),
+            )
+        )
+        await db.flush()
+
         svc = AuthService(db)
         result = await svc.validate_token(token, "invite")
         assert result["valid"] is True
@@ -289,13 +384,14 @@ class TestAuthServiceValidateToken:
     async def test_validate_consumed_token(self, db: AsyncSession, admin_user: User):
         token = create_email_token(admin_user.id, "reset")
         token_hash = hashlib.sha256(token.encode()).hexdigest()
-        rt = PasswordResetToken(
-            user_id=admin_user.id,
-            token_hash=token_hash,
-            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
-            used=True,
+        db.add(
+            PasswordResetToken(
+                user_id=admin_user.id,
+                token_hash=token_hash,
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+                used=True,
+            )
         )
-        db.add(rt)
         await db.flush()
 
         svc = AuthService(db)
@@ -310,8 +406,14 @@ class TestAuthServiceValidateToken:
 
 
 class TestAuthServiceGetMe:
-    async def test_get_me_success(self, db: AsyncSession, admin_user: User, admin_token: str):
+    async def test_get_me_success(
+        self,
+        db: AsyncSession,
+        admin_user: User,
+        admin_token: str,
+    ):
         from app.core.security import decode_access_token
+
         payload = decode_access_token(admin_token)
         svc = AuthService(db)
         result = await svc.get_me(payload)
@@ -329,9 +431,9 @@ class TestAuthServiceGetMe:
         db.add(user)
         await db.flush()
 
-        from app.core.security import create_access_token
+        from app.core.security import create_access_token, decode_access_token
+
         token = create_access_token(user.id, user.email, user.role)
-        from app.core.security import decode_access_token
         payload = decode_access_token(token)
 
         svc = AuthService(db)

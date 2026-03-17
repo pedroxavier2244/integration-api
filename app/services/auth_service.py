@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.exceptions import UnauthorizedException
+from app.core.exceptions import ExternalServiceException, UnauthorizedException
 from app.core.security import (
     verify_password,
     create_access_token,
@@ -27,6 +27,15 @@ from app.api.v1.schemas.audit import AuditAction
 class AuthService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
+
+    async def _get_active_user_or_raise(self, repo: UserRepository, user_id: str):
+        user = await repo.get_by_id(user_id)
+        if not user or not user.is_active:
+            raise UnauthorizedException(
+                code="AUTH_INVALID_TOKEN",
+                message="Token invalido para esta operacao.",
+            )
+        return user
 
     async def login(
         self, email: str, password: str, ip: str, user_agent: str
@@ -117,8 +126,25 @@ class AuthService:
     async def logout(self, refresh_token: str, user_id: str) -> None:
         from app.services.audit_service import AuditService
 
+        token_user_id = decode_refresh_token(refresh_token)
         token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
-        await UserRepository(self.db).revoke_refresh_token(token_hash)
+        repo = UserRepository(self.db)
+        rt = await repo.get_refresh_token(token_hash)
+        now = datetime.now(timezone.utc)
+
+        if (
+            rt is None
+            or rt.user_id != user_id
+            or token_user_id != user_id
+            or rt.is_revoked
+            or rt.expires_at.replace(tzinfo=timezone.utc) < now
+        ):
+            raise UnauthorizedException(
+                code="AUTH_INVALID_TOKEN",
+                message="Refresh token invalido ou expirado.",
+            )
+
+        await repo.revoke_refresh_token(token_hash)
         await AuditService(self.db).log(
             action=AuditAction.logout,
             user_id=user_id,
@@ -138,7 +164,13 @@ class AuthService:
         expires_at = datetime.now(timezone.utc) + timedelta(hours=settings.JWT_RESET_TOKEN_EXPIRE_HOURS)
         await repo.save_reset_token(user.id, token_hash, expires_at)
 
-        await send_reset_password_email(user.email, user.full_name, token)
+        try:
+            await send_reset_password_email(user.email, user.full_name, token)
+        except Exception as exc:
+            raise ExternalServiceException(
+                code="EMAIL_DELIVERY_FAILED",
+                message="Nao foi possivel enviar o email de redefinicao. Tente novamente mais tarde.",
+            ) from exc
 
         await AuditService(self.db).log(
             action=AuditAction.password_reset_requested,
@@ -163,15 +195,15 @@ class AuthService:
                 message="Token expirado ou ja utilizado.",
             )
 
+        user = await self._get_active_user_or_raise(repo, user_id)
         await repo.set_password(user_id, hash_password(new_password))
         await repo.consume_reset_token(token_hash)
         await repo.revoke_all_user_tokens(user_id)
 
-        user = await repo.get_by_id(user_id)
         await AuditService(self.db).log(
             action=AuditAction.password_reset,
             user_id=user_id,
-            user_email=user.email if user else None,
+            user_email=user.email,
         )
 
     async def accept_invite(self, token: str, new_password: str) -> None:
@@ -191,14 +223,14 @@ class AuthService:
                 message="Convite expirado ou ja utilizado. Solicite um novo convite.",
             )
 
+        user = await self._get_active_user_or_raise(repo, user_id)
         await repo.set_password(user_id, hash_password(new_password))
         await repo.consume_reset_token(token_hash)
 
-        user = await repo.get_by_id(user_id)
         await AuditService(self.db).log(
             action=AuditAction.invite_accepted,
             user_id=user_id,
-            user_email=user.email if user else None,
+            user_email=user.email,
         )
 
     async def validate_token(self, token: str, expected_type: str) -> dict:
