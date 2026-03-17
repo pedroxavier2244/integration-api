@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings
-from typing import List
+from typing import List, Optional
 
 
 class Settings(BaseSettings):
@@ -24,12 +24,16 @@ class Settings(BaseSettings):
 
     REDIS_URL: str = "redis://localhost:6379/0"
 
-    SMTP_HOST: str = "smtp.office365.com"
+    SMTP_HOST: Optional[str] = None
     SMTP_PORT: int = 587
-    SMTP_USER: str
-    SMTP_PASSWORD: str
-    SMTP_FROM: str
+    SMTP_USER: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    SMTP_FROM: Optional[str] = None
     SMTP_TLS: bool = True
+
+    @property
+    def SMTP_ENABLED(self) -> bool:
+        return bool(self.SMTP_HOST and self.SMTP_USER and self.SMTP_PASSWORD)
 
     FRONTEND_URL: str = "http://localhost:3000"
     RATE_LIMIT_LOGIN: str = "5/minute"

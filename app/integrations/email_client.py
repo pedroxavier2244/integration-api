@@ -16,6 +16,10 @@ _template_env = Environment(
 
 
 async def _send(to: str, subject: str, html_body: str) -> None:
+    if not settings.SMTP_ENABLED:
+        logger.warning("email_skipped", to=_mask_email(to), subject=subject, reason="SMTP not configured")
+        return
+
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"]    = settings.SMTP_FROM
