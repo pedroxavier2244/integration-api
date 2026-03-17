@@ -131,7 +131,7 @@ class TestLogoutEndpoint:
 
     async def test_logout_without_auth(self, client: AsyncClient):
         resp = await client.post(f"{BASE}/logout", json={"refresh_token": "any"})
-        assert resp.status_code == 401
+        assert resp.status_code == 403
 
     async def test_logout_with_other_user_refresh_token_returns_401(
         self,
@@ -190,7 +190,7 @@ class TestMeEndpoint:
 
     async def test_get_me_without_token(self, client: AsyncClient):
         resp = await client.get(f"{BASE}/me")
-        assert resp.status_code == 401
+        assert resp.status_code == 403
 
     async def test_get_me_invalid_token(self, client: AsyncClient):
         resp = await client.get(
