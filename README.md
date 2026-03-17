@@ -19,7 +19,7 @@ Este repositorio possui dois guias formais, com focos diferentes:
 Esta API atua sobre o banco compartilhado com o ETL (`etl_db`) e expoe:
 
 - autenticacao com JWT e refresh token persistido
-- gestao de usuarios por perfil (`admin`, `gestor`, `operador`)
+- gestao de usuarios por perfil (`admin`, `gestor`, `operador`) com escopo de equipe por `gestor_id`
 - consultas de clientes e empresas
 - auditoria operacional
 - integracao CRM inbound e outbound

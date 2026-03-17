@@ -153,6 +153,14 @@ Consequencia operacional importante:
 - `empresas:read`
 - `crm:outbound`
 - `audit:read`
+- `users:team:manage`
+
+Escopo de usuarios do gestor:
+
+- pode listar e consultar apenas a propria equipe
+- pode criar apenas `operador`
+- pode fazer CRUD operacional apenas de operadores da propria equipe
+- pode vincular e desvincular operador via `gestor_id`
 
 `operador`
 

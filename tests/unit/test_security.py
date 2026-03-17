@@ -73,6 +73,12 @@ class TestAccessToken:
         assert "users:manage" not in payload.permissions
         assert "audit:read" not in payload.permissions
 
+    def test_decode_permissions_gestor(self):
+        token = create_access_token("u", "u@t.com", UserRole.gestor)
+        payload = decode_access_token(token)
+        assert "users:team:manage" in payload.permissions
+        assert "users:manage" not in payload.permissions
+
     def test_decode_invalid_token_raises(self):
         with pytest.raises(UnauthorizedException):
             decode_access_token("not.a.valid.jwt")

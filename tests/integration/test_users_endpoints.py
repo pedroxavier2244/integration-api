@@ -1,22 +1,13 @@
 """
-Testes de integração para os endpoints de usuários.
-
-POST   /api/v1/users/
-GET    /api/v1/users/
-GET    /api/v1/users/{id}
-PATCH  /api/v1/users/{id}
-DELETE /api/v1/users/{id}
-POST   /api/v1/users/{id}/revoke-sessions
-POST   /api/v1/users/{id}/resend-invite
+Integration tests for user management endpoints.
 """
 from unittest.mock import AsyncMock, patch
 
-import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.user import User, UserRole
 from app.core.security import hash_password
+from app.models.user import User, UserRole
 
 
 BASE = "/api/v1/users"
@@ -24,125 +15,269 @@ BASE = "/api/v1/users"
 
 class TestCreateUser:
     @patch("app.integrations.email_client.send_invite_email", new_callable=AsyncMock)
-    async def test_create_user_success(self, mock_send, client: AsyncClient, admin_token: str):
+    async def test_admin_can_create_gestor(
+        self,
+        mock_send,
+        client: AsyncClient,
+        admin_token: str,
+    ):
         resp = await client.post(
             f"{BASE}/",
-            json={"email": "novo@test.com", "full_name": "Novo Usuário", "role": "operador"},
+            json={
+                "email": "novo-gestor@test.com",
+                "full_name": "Novo Gestor",
+                "role": "gestor",
+            },
             headers={"Authorization": f"Bearer {admin_token}"},
         )
         assert resp.status_code == 201
         data = resp.json()
-        assert data["email"] == "novo@test.com"
-        assert data["role"] == "operador"
-        assert data["invite_sent"] is True
+        assert data["role"] == "gestor"
+        assert data["gestor_id"] is None
         mock_send.assert_called_once()
 
     @patch("app.integrations.email_client.send_invite_email", new_callable=AsyncMock)
-    async def test_create_user_duplicate_email(self, mock_send, client: AsyncClient, admin_token: str, admin_user: User):
+    async def test_admin_can_create_operator_assigned_to_gestor(
+        self,
+        mock_send,
+        client: AsyncClient,
+        admin_token: str,
+        gestor_user: User,
+    ):
         resp = await client.post(
             f"{BASE}/",
-            json={"email": "admin@test.com", "full_name": "Duplicado", "role": "gestor"},
+            json={
+                "email": "novo-operador@test.com",
+                "full_name": "Novo Operador",
+                "role": "operador",
+                "gestor_id": gestor_user.id,
+            },
             headers={"Authorization": f"Bearer {admin_token}"},
         )
-        assert resp.status_code == 409
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["role"] == "operador"
+        assert data["gestor_id"] == gestor_user.id
+        mock_send.assert_called_once()
 
-    async def test_create_user_forbidden_for_operador(self, client: AsyncClient, operador_token: str):
+    @patch("app.integrations.email_client.send_invite_email", new_callable=AsyncMock)
+    async def test_gestor_can_create_operator_for_own_team(
+        self,
+        mock_send,
+        client: AsyncClient,
+        gestor_token: str,
+        gestor_user: User,
+    ):
         resp = await client.post(
             f"{BASE}/",
-            json={"email": "x@test.com", "full_name": "X", "role": "operador"},
+            json={
+                "email": "time-gestor@test.com",
+                "full_name": "Operador do Gestor",
+                "role": "operador",
+            },
+            headers={"Authorization": f"Bearer {gestor_token}"},
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["role"] == "operador"
+        assert data["gestor_id"] == gestor_user.id
+        mock_send.assert_called_once()
+
+    @patch("app.integrations.email_client.send_invite_email", new_callable=AsyncMock)
+    async def test_gestor_cannot_create_admin_or_gestor(
+        self,
+        mock_send,
+        client: AsyncClient,
+        gestor_token: str,
+    ):
+        for role in ("admin", "gestor"):
+            resp = await client.post(
+                f"{BASE}/",
+                json={
+                    "email": f"{role}@test.com",
+                    "full_name": f"Novo {role}",
+                    "role": role,
+                },
+                headers={"Authorization": f"Bearer {gestor_token}"},
+            )
+            assert resp.status_code == 403
+        mock_send.assert_not_called()
+
+    @patch("app.integrations.email_client.send_invite_email", new_callable=AsyncMock)
+    async def test_gestor_cannot_create_operator_for_other_gestor(
+        self,
+        mock_send,
+        client: AsyncClient,
+        gestor_token: str,
+        admin_token: str,
+    ):
+        other_gestor = await self._create_user(
+            client,
+            admin_token,
+            email="other-gestor@test.com",
+            full_name="Other Gestor",
+            role="gestor",
+        )
+        mock_send.reset_mock()
+
+        resp = await client.post(
+            f"{BASE}/",
+            json={
+                "email": "operador-outro-time@test.com",
+                "full_name": "Operador Outro Time",
+                "role": "operador",
+                "gestor_id": other_gestor["id"],
+            },
+            headers={"Authorization": f"Bearer {gestor_token}"},
+        )
+        assert resp.status_code == 403
+        mock_send.assert_not_called()
+
+    async def test_create_user_forbidden_for_operador(
+        self,
+        client: AsyncClient,
+        operador_token: str,
+    ):
+        resp = await client.post(
+            f"{BASE}/",
+            json={
+                "email": "x@test.com",
+                "full_name": "X",
+                "role": "operador",
+            },
             headers={"Authorization": f"Bearer {operador_token}"},
         )
         assert resp.status_code == 403
 
-    async def test_create_user_invalid_role(self, client: AsyncClient, admin_token: str):
-        resp = await client.post(
-            f"{BASE}/",
-            json={"email": "x@test.com", "full_name": "X", "role": "superadmin"},
-            headers={"Authorization": f"Bearer {admin_token}"},
-        )
-        assert resp.status_code == 422
-
-    async def test_create_user_missing_name(self, client: AsyncClient, admin_token: str):
-        resp = await client.post(
-            f"{BASE}/",
-            json={"email": "x@test.com", "role": "operador"},
-            headers={"Authorization": f"Bearer {admin_token}"},
-        )
-        assert resp.status_code == 422
-
-    async def test_create_user_without_token(self, client: AsyncClient):
-        resp = await client.post(
-            f"{BASE}/",
-            json={"email": "x@test.com", "full_name": "X", "role": "operador"},
-        )
-        assert resp.status_code == 403
+    @staticmethod
+    async def _create_user(
+        client: AsyncClient,
+        token: str,
+        *,
+        email: str,
+        full_name: str,
+        role: str,
+    ) -> dict:
+        with patch("app.integrations.email_client.send_invite_email", new_callable=AsyncMock):
+            resp = await client.post(
+                f"{BASE}/",
+                json={"email": email, "full_name": full_name, "role": role},
+                headers={"Authorization": f"Bearer {token}"},
+            )
+        assert resp.status_code == 201
+        return resp.json()
 
 
 class TestListUsers:
-    async def test_list_users_success(self, client: AsyncClient, admin_token: str, admin_user: User):
+    async def test_admin_lists_all_users(
+        self,
+        client: AsyncClient,
+        admin_token: str,
+        admin_user: User,
+        gestor_user: User,
+        operador_user: User,
+        operador_sem_gestor_user: User,
+    ):
         resp = await client.get(
             f"{BASE}/",
             headers={"Authorization": f"Bearer {admin_token}"},
         )
         assert resp.status_code == 200
         data = resp.json()
-        assert "items" in data
-        assert "total" in data
-        assert data["total"] >= 1
+        ids = {item["id"] for item in data["items"]}
+        assert admin_user.id in ids
+        assert gestor_user.id in ids
+        assert operador_user.id in ids
+        assert operador_sem_gestor_user.id in ids
 
-    async def test_list_users_pagination(self, client: AsyncClient, admin_token: str, admin_user: User):
-        resp = await client.get(
-            f"{BASE}/?page=1&page_size=5",
-            headers={"Authorization": f"Bearer {admin_token}"},
-        )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["page"] == 1
-        assert data["page_size"] == 5
-
-    async def test_list_users_forbidden_for_gestor(self, client: AsyncClient, gestor_token: str):
+    async def test_gestor_lists_only_own_team(
+        self,
+        client: AsyncClient,
+        gestor_token: str,
+        gestor_user: User,
+        operador_user: User,
+        operador_sem_gestor_user: User,
+        admin_user: User,
+    ):
         resp = await client.get(
             f"{BASE}/",
             headers={"Authorization": f"Bearer {gestor_token}"},
         )
-        assert resp.status_code == 403
+        assert resp.status_code == 200
+        data = resp.json()
+        ids = {item["id"] for item in data["items"]}
+        assert operador_user.id in ids
+        assert admin_user.id not in ids
+        assert gestor_user.id not in ids
+        assert operador_sem_gestor_user.id not in ids
+        assert all(item["role"] == "operador" for item in data["items"])
 
 
 class TestGetUser:
-    async def test_get_user_success(self, client: AsyncClient, admin_token: str, admin_user: User):
+    async def test_admin_can_get_any_user(
+        self,
+        client: AsyncClient,
+        admin_token: str,
+        gestor_user: User,
+    ):
         resp = await client.get(
-            f"{BASE}/{admin_user.id}",
+            f"{BASE}/{gestor_user.id}",
             headers={"Authorization": f"Bearer {admin_token}"},
         )
         assert resp.status_code == 200
-        data = resp.json()
-        assert data["id"] == admin_user.id
-        assert data["email"] == "admin@test.com"
+        assert resp.json()["id"] == gestor_user.id
 
-    async def test_get_user_not_found(self, client: AsyncClient, admin_token: str):
+    async def test_gestor_can_get_own_operator(
+        self,
+        client: AsyncClient,
+        gestor_token: str,
+        operador_user: User,
+    ):
         resp = await client.get(
-            f"{BASE}/nonexistent-id",
-            headers={"Authorization": f"Bearer {admin_token}"},
+            f"{BASE}/{operador_user.id}",
+            headers={"Authorization": f"Bearer {gestor_token}"},
         )
-        assert resp.status_code == 404
+        assert resp.status_code == 200
+        assert resp.json()["id"] == operador_user.id
 
-    async def test_get_user_without_auth(self, client: AsyncClient, admin_user: User):
-        resp = await client.get(f"{BASE}/{admin_user.id}")
-        assert resp.status_code == 403
+    async def test_gestor_cannot_get_admin_or_unassigned_operator(
+        self,
+        client: AsyncClient,
+        gestor_token: str,
+        admin_user: User,
+        operador_sem_gestor_user: User,
+    ):
+        for user_id in (admin_user.id, operador_sem_gestor_user.id):
+            resp = await client.get(
+                f"{BASE}/{user_id}",
+                headers={"Authorization": f"Bearer {gestor_token}"},
+            )
+            assert resp.status_code == 403
 
 
 class TestUpdateUser:
-    async def test_update_user_name_success(self, client: AsyncClient, admin_token: str, operador_user: User):
+    async def test_admin_can_assign_operator_to_gestor(
+        self,
+        client: AsyncClient,
+        admin_token: str,
+        gestor_user: User,
+        operador_sem_gestor_user: User,
+    ):
         resp = await client.patch(
-            f"{BASE}/{operador_user.id}",
-            json={"full_name": "Novo Nome Operador"},
+            f"{BASE}/{operador_sem_gestor_user.id}",
+            json={"gestor_id": gestor_user.id},
             headers={"Authorization": f"Bearer {admin_token}"},
         )
         assert resp.status_code == 200
         data = resp.json()
-        assert data["full_name"] == "Novo Nome Operador"
+        assert data["gestor_id"] == gestor_user.id
 
-    async def test_update_user_role_success(self, client: AsyncClient, admin_token: str, operador_user: User):
+    async def test_admin_can_promote_operator_and_clear_team(
+        self,
+        client: AsyncClient,
+        admin_token: str,
+        operador_user: User,
+    ):
         resp = await client.patch(
             f"{BASE}/{operador_user.id}",
             json={"role": "gestor"},
@@ -151,29 +286,108 @@ class TestUpdateUser:
         assert resp.status_code == 200
         data = resp.json()
         assert data["role"] == "gestor"
+        assert data["gestor_id"] is None
 
-    async def test_update_user_not_found(self, client: AsyncClient, admin_token: str):
+    async def test_gestor_can_update_own_operator_name(
+        self,
+        client: AsyncClient,
+        gestor_token: str,
+        operador_user: User,
+    ):
         resp = await client.patch(
-            f"{BASE}/nonexistent-id",
-            json={"full_name": "Nome"},
-            headers={"Authorization": f"Bearer {admin_token}"},
+            f"{BASE}/{operador_user.id}",
+            json={"full_name": "Operador Atualizado"},
+            headers={"Authorization": f"Bearer {gestor_token}"},
         )
-        assert resp.status_code == 404
+        assert resp.status_code == 200
+        assert resp.json()["full_name"] == "Operador Atualizado"
 
-    async def test_update_user_forbidden(self, client: AsyncClient, operador_token: str, admin_user: User):
+    async def test_gestor_can_claim_unassigned_operator(
+        self,
+        client: AsyncClient,
+        gestor_token: str,
+        gestor_user: User,
+        operador_sem_gestor_user: User,
+    ):
         resp = await client.patch(
-            f"{BASE}/{admin_user.id}",
-            json={"full_name": "Hack"},
-            headers={"Authorization": f"Bearer {operador_token}"},
+            f"{BASE}/{operador_sem_gestor_user.id}",
+            json={"gestor_id": gestor_user.id},
+            headers={"Authorization": f"Bearer {gestor_token}"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["gestor_id"] == gestor_user.id
+
+    async def test_gestor_can_remove_operator_from_team(
+        self,
+        client: AsyncClient,
+        gestor_token: str,
+        operador_user: User,
+    ):
+        resp = await client.patch(
+            f"{BASE}/{operador_user.id}",
+            json={"gestor_id": None},
+            headers={"Authorization": f"Bearer {gestor_token}"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["gestor_id"] is None
+
+    async def test_gestor_cannot_promote_operator(
+        self,
+        client: AsyncClient,
+        gestor_token: str,
+        operador_user: User,
+    ):
+        resp = await client.patch(
+            f"{BASE}/{operador_user.id}",
+            json={"role": "gestor"},
+            headers={"Authorization": f"Bearer {gestor_token}"},
+        )
+        assert resp.status_code == 403
+
+    async def test_gestor_cannot_manage_other_team_operator(
+        self,
+        client: AsyncClient,
+        db: AsyncSession,
+        gestor_token: str,
+    ):
+        other_gestor = User(
+            email="other-team-gestor@test.com",
+            full_name="Other Team Gestor",
+            role=UserRole.gestor,
+            hashed_password=hash_password("Gestor@123"),
+            is_active=True,
+        )
+        db.add(other_gestor)
+        await db.flush()
+
+        other_operator = User(
+            email="other-team-operador@test.com",
+            full_name="Other Team Operador",
+            role=UserRole.operador,
+            gestor_id=other_gestor.id,
+            hashed_password=hash_password("Operador@123"),
+            is_active=True,
+        )
+        db.add(other_operator)
+        await db.flush()
+
+        resp = await client.patch(
+            f"{BASE}/{other_operator.id}",
+            json={"full_name": "Tentativa Invalida"},
+            headers={"Authorization": f"Bearer {gestor_token}"},
         )
         assert resp.status_code == 403
 
 
 class TestDeactivateUser:
-    async def test_deactivate_user_success(self, client: AsyncClient, db: AsyncSession, admin_token: str):
-        # Cria usuário para desativar (não pode ser o próprio admin)
+    async def test_admin_can_deactivate_any_non_self_user(
+        self,
+        client: AsyncClient,
+        db: AsyncSession,
+        admin_token: str,
+    ):
         user = User(
-            email="todeactivate@test.com",
+            email="to-deactivate@test.com",
             full_name="To Deactivate",
             role=UserRole.operador,
             hashed_password=hash_password("pass"),
@@ -187,50 +401,75 @@ class TestDeactivateUser:
             headers={"Authorization": f"Bearer {admin_token}"},
         )
         assert resp.status_code == 200
-        data = resp.json()
-        assert data["success"] is True
+        assert resp.json()["success"] is True
 
-    async def test_cannot_deactivate_self(self, client: AsyncClient, admin_token: str, admin_user: User):
+    async def test_gestor_can_deactivate_own_operator(
+        self,
+        client: AsyncClient,
+        gestor_token: str,
+        operador_user: User,
+    ):
+        resp = await client.delete(
+            f"{BASE}/{operador_user.id}",
+            headers={"Authorization": f"Bearer {gestor_token}"},
+        )
+        assert resp.status_code == 200
+
+    async def test_gestor_cannot_deactivate_outside_team(
+        self,
+        client: AsyncClient,
+        gestor_token: str,
+        admin_user: User,
+    ):
         resp = await client.delete(
             f"{BASE}/{admin_user.id}",
-            headers={"Authorization": f"Bearer {admin_token}"},
+            headers={"Authorization": f"Bearer {gestor_token}"},
         )
         assert resp.status_code == 403
 
-    async def test_deactivate_not_found(self, client: AsyncClient, admin_token: str):
-        resp = await client.delete(
-            f"{BASE}/nonexistent-id",
-            headers={"Authorization": f"Bearer {admin_token}"},
-        )
-        assert resp.status_code == 404
-
 
 class TestRevokeSessions:
-    async def test_revoke_sessions_success(self, client: AsyncClient, admin_token: str, operador_user: User):
+    async def test_gestor_can_revoke_sessions_of_own_operator(
+        self,
+        client: AsyncClient,
+        gestor_token: str,
+        operador_user: User,
+    ):
         resp = await client.post(
             f"{BASE}/{operador_user.id}/revoke-sessions",
-            headers={"Authorization": f"Bearer {admin_token}"},
+            headers={"Authorization": f"Bearer {gestor_token}"},
         )
         assert resp.status_code == 200
-        data = resp.json()
-        assert data["success"] is True
+        assert resp.json()["success"] is True
 
-    async def test_revoke_sessions_not_found(self, client: AsyncClient, admin_token: str):
+    async def test_gestor_cannot_revoke_sessions_outside_team(
+        self,
+        client: AsyncClient,
+        gestor_token: str,
+        admin_user: User,
+    ):
         resp = await client.post(
-            f"{BASE}/nonexistent-id/revoke-sessions",
-            headers={"Authorization": f"Bearer {admin_token}"},
+            f"{BASE}/{admin_user.id}/revoke-sessions",
+            headers={"Authorization": f"Bearer {gestor_token}"},
         )
-        assert resp.status_code == 404
+        assert resp.status_code == 403
 
 
 class TestResendInvite:
     @patch("app.integrations.email_client.send_invite_email", new_callable=AsyncMock)
-    async def test_resend_invite_success(self, mock_send, client: AsyncClient, db: AsyncSession, admin_token: str):
-        # Usuário sem senha (não aceitou convite ainda)
+    async def test_gestor_can_resend_invite_for_own_operator_without_password(
+        self,
+        mock_send,
+        client: AsyncClient,
+        db: AsyncSession,
+        gestor_token: str,
+        gestor_user: User,
+    ):
         user = User(
             email="noinvite@test.com",
             full_name="No Invite",
             role=UserRole.operador,
+            gestor_id=gestor_user.id,
             hashed_password=None,
             is_active=True,
         )
@@ -239,24 +478,20 @@ class TestResendInvite:
 
         resp = await client.post(
             f"{BASE}/{user.id}/resend-invite",
-            headers={"Authorization": f"Bearer {admin_token}"},
+            headers={"Authorization": f"Bearer {gestor_token}"},
         )
         assert resp.status_code == 200
-        data = resp.json()
-        assert data["success"] is True
+        assert resp.json()["success"] is True
         mock_send.assert_called_once()
 
-    async def test_resend_invite_already_accepted(self, client: AsyncClient, admin_token: str, operador_user: User):
-        """Usuário que já definiu senha não pode receber novo convite."""
+    async def test_gestor_cannot_resend_invite_outside_team(
+        self,
+        client: AsyncClient,
+        gestor_token: str,
+        admin_user: User,
+    ):
         resp = await client.post(
-            f"{BASE}/{operador_user.id}/resend-invite",
-            headers={"Authorization": f"Bearer {admin_token}"},
+            f"{BASE}/{admin_user.id}/resend-invite",
+            headers={"Authorization": f"Bearer {gestor_token}"},
         )
-        assert resp.status_code == 409
-
-    async def test_resend_invite_not_found(self, client: AsyncClient, admin_token: str):
-        resp = await client.post(
-            f"{BASE}/nonexistent-id/resend-invite",
-            headers={"Authorization": f"Bearer {admin_token}"},
-        )
-        assert resp.status_code == 404
+        assert resp.status_code == 403

@@ -125,11 +125,26 @@ async def gestor_user(db: AsyncSession) -> User:
 
 
 @pytest_asyncio.fixture
-async def operador_user(db: AsyncSession) -> User:
+async def operador_user(db: AsyncSession, gestor_user: User) -> User:
     """Cria e persiste um usuário operador."""
     user = User(
         email="operador@test.com",
         full_name="Operador Test",
+        role=UserRole.operador,
+        gestor_id=gestor_user.id,
+        hashed_password=hash_password("Operador@123"),
+        is_active=True,
+    )
+    db.add(user)
+    await db.flush()
+    return user
+
+
+@pytest_asyncio.fixture
+async def operador_sem_gestor_user(db: AsyncSession) -> User:
+    user = User(
+        email="semgestor@test.com",
+        full_name="Operador Sem Gestor",
         role=UserRole.operador,
         hashed_password=hash_password("Operador@123"),
         is_active=True,

@@ -140,6 +140,15 @@ Resposta:
 - empresas
 - CRM outbound
 - auditoria
+- gestao do proprio time de operadores
+
+Regras do bloco `users`:
+
+- gestor lista apenas os operadores com `gestor_id` igual ao proprio usuario
+- gestor pode criar apenas usuarios com role `operador`
+- gestor pode adicionar operador sem time para a propria equipe
+- gestor pode remover operador da propria equipe
+- gestor nao pode criar, promover ou editar outro `gestor` ou `admin`
 
 ### 4.3 `operador`
 
