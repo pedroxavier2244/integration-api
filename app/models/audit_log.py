@@ -17,6 +17,7 @@ from app.models.base import Base
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"
+    __table_args__ = {"schema": "integration"}
 
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
@@ -24,7 +25,7 @@ class AuditLog(Base):
     # Nullable: ações de sistema ou de usuário não autenticado (ex: login_failed)
     user_id: Mapped[str | None] = mapped_column(
         String(36),
-        ForeignKey("users.id", ondelete="SET NULL"),
+        ForeignKey("integration.users.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )

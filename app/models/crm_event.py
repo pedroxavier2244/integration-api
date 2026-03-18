@@ -17,6 +17,7 @@ from app.models.base import Base
 
 class CrmInboundEvent(Base):
     __tablename__ = "crm_inbound_events"
+    __table_args__ = {"schema": "integration"}
 
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
@@ -41,6 +42,7 @@ class CrmInboundEvent(Base):
 
 class CrmOutboundJob(Base):
     __tablename__ = "crm_outbound_jobs"
+    __table_args__ = {"schema": "integration"}
 
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())

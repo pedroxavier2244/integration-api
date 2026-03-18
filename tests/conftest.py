@@ -46,6 +46,7 @@ engine_test = create_async_engine(
     TEST_DATABASE_URL,
     connect_args={"check_same_thread": False},
     poolclass=StaticPool,
+    execution_options={"schema_translate_map": {"integration": None, "etl": None}},
 )
 
 TestingSessionLocal = async_sessionmaker(
@@ -59,12 +60,19 @@ TestingSessionLocal = async_sessionmaker(
 
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def create_tables():
-    """Cria todas as tabelas antes da sessão de testes."""
+    """Cria todas as tabelas antes da sessão de testes.
+
+    SQLite não suporta schemas, então mapeamos integration→None e etl→None
+    para que o create_all funcione em memória.
+    """
+    schema_map = {"integration": None, "etl": None}
     async with engine_test.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+        conn_mapped = await conn.execution_options(schema_translate_map=schema_map)
+        await conn_mapped.run_sync(Base.metadata.create_all)
     yield
     async with engine_test.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+        conn_mapped = await conn.execution_options(schema_translate_map=schema_map)
+        await conn_mapped.run_sync(Base.metadata.drop_all)
 
 
 @pytest_asyncio.fixture

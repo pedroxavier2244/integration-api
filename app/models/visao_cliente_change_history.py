@@ -14,6 +14,7 @@ from app.models.base import Base
 
 class VisaoClienteChangeHistory(Base):
     __tablename__ = "visao_cliente_change_history"
+    __table_args__ = {"schema": "etl"}
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     documento: Mapped[str] = mapped_column(Text, nullable=False, index=True)

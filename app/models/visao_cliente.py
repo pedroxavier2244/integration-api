@@ -12,6 +12,7 @@ from app.models.base import Base
 
 class VisaoCliente(Base):
     __tablename__ = "final_visao_cliente"
+    __table_args__ = {"schema": "etl"}
 
     # ─── Identificação do cliente ─────────────────────────────────────────────
     cd_cpf_cnpj_cliente: Mapped[str] = mapped_column(Text, primary_key=True)

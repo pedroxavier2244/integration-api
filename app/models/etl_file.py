@@ -14,6 +14,7 @@ from app.models.base import Base
 
 class EtlFile(Base):
     __tablename__ = "etl_file"
+    __table_args__ = {"schema": "etl"}
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     filename: Mapped[str | None] = mapped_column(Text, nullable=True)
