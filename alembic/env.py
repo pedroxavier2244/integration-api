@@ -39,22 +39,9 @@ config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 target_metadata = Base.metadata
 
-# Tabelas gerenciadas pelo ETL — ignorar no autogenerate
-EXCLUDE_TABLES = {
-    "final_visao_cliente",
-    "staging_visao_cliente",
-    "etl_file",
-    "etl_job_run",
-    "etl_job_step",
-    "etl_bad_rows",
-    "visao_cliente_change_history",
-    "cnpj_rf_cache",
-    "cnpj_divergencia",
-}
-
-
+# Tables in the etl schema — ignore in autogenerate (read-only for integration-api)
 def include_object(object, name, type_, reflected, compare_to):
-    if type_ == "table" and name in EXCLUDE_TABLES:
+    if type_ == "table" and getattr(object, "schema", None) == "etl":
         return False
     return True
 
@@ -68,6 +55,8 @@ def run_migrations_offline() -> None:
         dialect_opts={"paramstyle": "named"},
         include_object=include_object,
         version_table="integration_api_alembic_version",
+        version_table_schema="integration",
+        include_schemas=True,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -79,6 +68,8 @@ def do_run_migrations(connection: Connection) -> None:
         target_metadata=target_metadata,
         include_object=include_object,
         version_table="integration_api_alembic_version",
+        version_table_schema="integration",
+        include_schemas=True,
     )
     with context.begin_transaction():
         context.run_migrations()
