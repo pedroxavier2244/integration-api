@@ -28,14 +28,16 @@ def test_integration_foreign_keys_are_schema_qualified():
     from sqlalchemy import inspect as sa_inspect
     from app.models.user import User
     from app.models.refresh_token import RefreshToken
+    from app.models.password_reset_token import PasswordResetToken
     from app.models.audit_log import AuditLog
 
     expected_fks = {
         "User": {"integration.users.id"},          # gestor_id (self-referential)
         "RefreshToken": {"integration.users.id"},
+        "PasswordResetToken": {"integration.users.id"},
         "AuditLog": {"integration.users.id"},
     }
-    for model_cls in [User, RefreshToken, AuditLog]:
+    for model_cls in [User, RefreshToken, PasswordResetToken, AuditLog]:
         mapper = sa_inspect(model_cls)
         actual = {
             fk.target_fullname
