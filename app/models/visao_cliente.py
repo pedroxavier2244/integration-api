@@ -146,15 +146,3 @@ class VisaoCliente(Base):
     dias_desde_abertura: Mapped[str | None] = mapped_column(Text, nullable=True)
     m2_dias_faltantes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    # ─── Receita Federal (CNPJ) ───────────────────────────────────────────────
-    rf_razao_social: Mapped[str | None] = mapped_column(Text, nullable=True)
-    rf_natureza_juridica: Mapped[str | None] = mapped_column(Text, nullable=True)
-    rf_capital_social: Mapped[str | None] = mapped_column(Text, nullable=True)
-    rf_porte_empresa: Mapped[str | None] = mapped_column(Text, nullable=True)
-    rf_nome_fantasia: Mapped[str | None] = mapped_column(Text, nullable=True)
-    rf_situacao_cadastral: Mapped[str | None] = mapped_column(Text, nullable=True)
-    rf_data_inicio_ativ: Mapped[str | None] = mapped_column(Text, nullable=True)
-    rf_cnae_principal: Mapped[str | None] = mapped_column(Text, nullable=True)
-    rf_uf: Mapped[str | None] = mapped_column(Text, nullable=True)
-    rf_municipio: Mapped[str | None] = mapped_column(Text, nullable=True)
-    rf_email: Mapped[str | None] = mapped_column(Text, nullable=True)

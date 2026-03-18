@@ -190,18 +190,6 @@ class ClienteDetailResponse(BaseModel):
     status_qualificacao: Optional[str] = None
     dias_desde_abertura: Optional[str] = None
     m2_dias_faltantes: Optional[str] = None
-    rf_razao_social: Optional[str] = None
-    rf_natureza_juridica: Optional[str] = None
-    rf_capital_social: Optional[str] = None
-    rf_porte_empresa: Optional[str] = None
-    rf_nome_fantasia: Optional[str] = None
-    rf_situacao_cadastral: Optional[str] = None
-    rf_data_inicio_ativ: Optional[str] = None
-    rf_cnae_principal: Optional[str] = None
-    rf_uf: Optional[str] = None
-    rf_municipio: Optional[str] = None
-    rf_email: Optional[str] = None
-
     @computed_field
     @property
     def nunca_qualificou(self) -> bool:
@@ -215,51 +203,6 @@ class ClienteDetailResponse(BaseModel):
 
 class ClienteConsultaItemResponse(ClienteDetailResponse):
     """Resposta detalhada no formato consumido pela busca operacional."""
-
-    @computed_field
-    @property
-    def nome_fantasia(self) -> Optional[str]:
-        return self.rf_nome_fantasia
-
-    @computed_field
-    @property
-    def situacao_cadastral(self) -> Optional[str]:
-        return self.rf_situacao_cadastral
-
-    @computed_field
-    @property
-    def descricao_situacao(self) -> Optional[str]:
-        return None
-
-    @computed_field
-    @property
-    def cnae_fiscal(self) -> Optional[str]:
-        return self.rf_cnae_principal
-
-    @computed_field
-    @property
-    def cnae_descricao(self) -> Optional[str]:
-        return None
-
-    @computed_field
-    @property
-    def natureza_juridica(self) -> Optional[str]:
-        return self.rf_natureza_juridica
-
-    @computed_field
-    @property
-    def capital_social(self) -> Optional[str]:
-        return self.rf_capital_social
-
-    @computed_field
-    @property
-    def porte(self) -> Optional[str]:
-        return self.rf_porte_empresa
-
-    @computed_field
-    @property
-    def data_inicio_ativ(self) -> Optional[str]:
-        return self.rf_data_inicio_ativ
 
     @computed_field
     @property
@@ -305,18 +248,12 @@ class ClienteHistoricoAlteracoesResponse(BaseModel):
 
 
 class EmpresaResponse(BaseModel):
-    """Dados da Receita Federal de um cliente PJ."""
+    """Dados básicos de um cliente PJ."""
     cd_cpf_cnpj_cliente: str
     nome_cliente: Optional[str] = None
-    rf_razao_social: Optional[str] = None
-    rf_nome_fantasia: Optional[str] = None
-    rf_situacao_cadastral: Optional[str] = None
-    rf_cnae_principal: Optional[str] = None
-    rf_natureza_juridica: Optional[str] = None
-    rf_capital_social: Optional[str] = None
-    rf_porte_empresa: Optional[str] = None
-    rf_data_inicio_ativ: Optional[str] = None
-    rf_uf: Optional[str] = None
-    rf_municipio: Optional[str] = None
-    rf_email: Optional[str] = None
+    tipo_pessoa: Optional[str] = None
+    uf: Optional[str] = None
+    cidade: Optional[str] = None
+    ramo_atuacao: Optional[str] = None
+    status_cc: Optional[str] = None
     model_config = {"from_attributes": True}
