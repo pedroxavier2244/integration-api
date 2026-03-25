@@ -56,3 +56,7 @@ alembic/versions/__pycache__/
 
 # Docker
 *.env.docker
+
+# Scripts de deploy/exploração — contêm credenciais, nunca subir ao git
+ssh_deploy.py
+vps_explore.py
