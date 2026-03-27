@@ -256,4 +256,6 @@ class EmpresaResponse(BaseModel):
     cidade: Optional[str] = None
     ramo_atuacao: Optional[str] = None
     status_cc: Optional[str] = None
+    nome_consultor: Optional[str] = None
+    cd_cpf_cnpj_consultor: Optional[str] = None
     model_config = {"from_attributes": True}

@@ -2,8 +2,8 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+import bcrypt as _bcrypt
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from pydantic import ValidationError
 
 from app.core.config import settings
@@ -11,15 +11,13 @@ from app.core.exceptions import UnauthorizedException
 from app.api.v1.schemas.auth import TokenPayload
 from app.api.v1.schemas.users import UserRole, get_permissions
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 def hash_password(plain: str) -> str:
-    return pwd_context.hash(plain)
+    return _bcrypt.hashpw(plain.encode(), _bcrypt.gensalt()).decode()
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    return _bcrypt.checkpw(plain.encode(), hashed.encode())
 
 
 def _create_token(data: dict, expires_delta: timedelta) -> str:

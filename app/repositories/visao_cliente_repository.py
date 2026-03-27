@@ -220,6 +220,65 @@ class VisaoClienteRepository:
 
         return items, total
 
+    async def search_empresas(
+        self,
+        q: Optional[str] = None,
+        uf: Optional[str] = None,
+        status_cc: Optional[str] = None,
+        ramo_atuacao: Optional[str] = None,
+        consultor: Optional[str] = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> Tuple[List[VisaoCliente], int]:
+        """Busca empresas com filtros operacionais de carteira."""
+        query = select(VisaoCliente)
+        count_q = select(func.count()).select_from(VisaoCliente)
+        filters = []
+
+        if q:
+            filters.append(or_(
+                VisaoCliente.cd_cpf_cnpj_cliente.ilike(f"%{q}%"),
+                self._contains(VisaoCliente.nome_cliente, q),
+            ))
+
+        if uf:
+            filters.append(
+                func.upper(func.coalesce(VisaoCliente.uf, "")) == uf.strip().upper()
+            )
+
+        if status_cc:
+            filters.append(
+                func.upper(func.coalesce(VisaoCliente.status_cc, "")) == status_cc.strip().upper()
+            )
+
+        if ramo_atuacao:
+            filters.append(self._contains(VisaoCliente.ramo_atuacao, ramo_atuacao))
+
+        if consultor:
+            pattern = f"%{consultor.strip().upper()}%"
+            filters.append(or_(
+                func.upper(func.coalesce(VisaoCliente.nome_consultor, "")).like(pattern),
+                VisaoCliente.cd_cpf_cnpj_consultor.ilike(f"%{consultor.strip()}%"),
+            ))
+
+        if filters:
+            query = query.where(*filters)
+            count_q = count_q.where(*filters)
+
+        query = (
+            query.order_by(VisaoCliente.nome_cliente)
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+
+        result = await self.db.execute(query)
+        items = list(result.scalars().all())
+
+        count_result = await self.db.execute(count_q)
+        total = count_result.scalar_one()
+
+        return items, total
+
     # ─── Indicadores (queries dos 4 KPIs) ────────────────────────────────────
 
     async def count_contas_abertas(self, date_start: date, date_end: date) -> int:

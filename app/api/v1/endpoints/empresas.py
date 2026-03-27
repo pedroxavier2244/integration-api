@@ -17,18 +17,34 @@ router = APIRouter()
 @router.get("/", response_model=PaginatedResponse[EmpresaResponse], summary="Buscar empresas (dados Receita Federal)")
 async def list_empresas(
     q: Optional[str] = Query(None, description="CPF/CNPJ ou razão social"),
+    uf: Optional[str] = Query(None, description="Filtro exato por UF (ex: SP)"),
+    status_cc: Optional[str] = Query(None, description="Filtro por status da conta corrente (ex: LIBERADA)"),
+    ramo_atuacao: Optional[str] = Query(None, description="Busca parcial no ramo de atuação"),
+    consultor: Optional[str] = Query(None, description="Busca parcial no nome ou CNPJ do consultor"),
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
     current_user=RequireEmpresasRead,
 ):
     repo = VisaoClienteRepository(db)
-    items, total = await repo.search(q=q, page=page, page_size=page_size)
+    items, total = await repo.search_empresas(
+        q=q,
+        uf=uf,
+        status_cc=status_cc,
+        ramo_atuacao=ramo_atuacao,
+        consultor=consultor,
+        page=page,
+        page_size=page_size,
+    )
 
     await AuditService(db).log(
         action=AuditAction.empresa_read,
         user_id=current_user.sub,
-        payload={"q": q, "page": page},
+        payload={k: v for k, v in {
+            "q": q, "uf": uf, "status_cc": status_cc,
+            "ramo_atuacao": ramo_atuacao, "consultor": consultor,
+            "page": page,
+        }.items() if v is not None},
     )
 
     return PaginatedResponse(
