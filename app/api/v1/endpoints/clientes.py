@@ -187,7 +187,6 @@ async def list_clientes_completo(
         q=q,
         cnpj=documento or cnpj,
         nome=nome,
-        safra=safra,
         safra_maquina=safra_maquina,
         nunca_qualificou=nunca_qualificou,
         comissao_prox_mes=comissao_prox_mes,

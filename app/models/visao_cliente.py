@@ -2,9 +2,9 @@
 Model ORM para a tabela final_visao_cliente.
 
 Tabela READ-ONLY para a Integration API — quem escreve nela é o ETL (implementation).
-Todas as colunas são TEXT, espelhando exatamente o schema do banco na VPS.
+Todas as colunas são TEXT, espelhando exatamente o schema do banco Neon.
 """
-from sqlalchemy import Float, Text
+from sqlalchemy import Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -44,7 +44,6 @@ class VisaoCliente(Base):
     chaves_pix_forte: Mapped[str | None] = mapped_column(Text, nullable=True)
     dt_conta_criada_global: Mapped[str | None] = mapped_column(Text, nullable=True)
     vl_cash_in_conta_global_mtd: Mapped[str | None] = mapped_column(Text, nullable=True)
-    nivel_conta: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # ─── Cartão ───────────────────────────────────────────────────────────────
     limite_cartao: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -53,7 +52,7 @@ class VisaoCliente(Base):
     dt_ativ_cartao_cred: Mapped[str | None] = mapped_column(Text, nullable=True)
     vl_spending_total_mtd: Mapped[str | None] = mapped_column(Text, nullable=True)
     status_pagamento_fatura: Mapped[str | None] = mapped_column(Text, nullable=True)
-    nivel_cartao: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status_cartao: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # ─── C6Pay (maquininha) ───────────────────────────────────────────────────
     fl_propensao_c6pay: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -72,16 +71,9 @@ class VisaoCliente(Base):
     tpv_m1: Mapped[str | None] = mapped_column(Text, nullable=True)
     tpv_m0: Mapped[str | None] = mapped_column(Text, nullable=True)
     faixa_tpv_prometido: Mapped[str | None] = mapped_column(Text, nullable=True)
-    cancelamento_maq: Mapped[str | None] = mapped_column(Text, nullable=True)
-    elegivel_c6: Mapped[str | None] = mapped_column(Text, nullable=True)
-    safra_maquina: Mapped[str | None] = mapped_column(Text, nullable=True)
-    idade_safra_maquina: Mapped[str | None] = mapped_column(Text, nullable=True)
-    metrica_ativacao: Mapped[float | None] = mapped_column(Float, nullable=True)
-    metrica_progresso: Mapped[float | None] = mapped_column(Float, nullable=True)
-    metrica_urgencia: Mapped[float | None] = mapped_column(Float, nullable=True)
-    metrica_financeiro: Mapped[float | None] = mapped_column(Float, nullable=True)
-    metrica_intencao: Mapped[float | None] = mapped_column(Float, nullable=True)
-    score_perfil: Mapped[float | None] = mapped_column(Float, nullable=True)
+    total_tpv: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status_maq: Mapped[str | None] = mapped_column(Text, nullable=True)
+    insight_maq: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # ─── Boleto / Cobrança ────────────────────────────────────────────────────
     fl_propensao_bolcob: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -96,8 +88,8 @@ class VisaoCliente(Base):
     volume_antecipado: Mapped[str | None] = mapped_column(Text, nullable=True)
     agenda_disponivel: Mapped[str | None] = mapped_column(Text, nullable=True)
     taxa_antecipacao: Mapped[str | None] = mapped_column(Text, nullable=True)
-    safra_boleto: Mapped[str | None] = mapped_column(Text, nullable=True)
-    idade_safra_boleto: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status_bolcbob: Mapped[str | None] = mapped_column(Text, nullable=True)
+    insight_bolcob: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # ─── Cash In ──────────────────────────────────────────────────────────────
     vl_cash_in_mtd: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -109,6 +101,9 @@ class VisaoCliente(Base):
     fl_cash_in_setup_pagamentos: Mapped[str | None] = mapped_column(Text, nullable=True)
     fl_cash_in_setup_deb_auto: Mapped[str | None] = mapped_column(Text, nullable=True)
     vl_saldo_medio_mensalizado: Mapped[str | None] = mapped_column(Text, nullable=True)
+    insight_pix_forte: Mapped[str | None] = mapped_column(Text, nullable=True)
+    insight_conta_global: Mapped[str | None] = mapped_column(Text, nullable=True)
+    insight_cartao: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # ─── Comissão / Qualificação ──────────────────────────────────────────────
     mes_ref_comiss: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -123,11 +118,11 @@ class VisaoCliente(Base):
     multiplicador: Mapped[str | None] = mapped_column(Text, nullable=True)
     ja_pago_comiss: Mapped[str | None] = mapped_column(Text, nullable=True)
     previsao_comiss: Mapped[str | None] = mapped_column(Text, nullable=True)
-    faixa_max: Mapped[str | None] = mapped_column(Text, nullable=True)
+    faixa_maximo: Mapped[str | None] = mapped_column(Text, nullable=True)
     faixa_alvo: Mapped[str | None] = mapped_column(Text, nullable=True)
-    threshiold_cash_in: Mapped[str | None] = mapped_column(Text, nullable=True)  # typo original do banco
+    threshold_cash_in: Mapped[str | None] = mapped_column(Text, nullable=True)
     threshold_spending: Mapped[str | None] = mapped_column(Text, nullable=True)
-    threshold_saldo_medio: Mapped[str | None] = mapped_column(Text, nullable=True)
+    thereshold_saldo_medio: Mapped[str | None] = mapped_column(Text, nullable=True)  # typo original do ETL
     threshold_conta_global: Mapped[str | None] = mapped_column(Text, nullable=True)
     threshold_domicilio: Mapped[str | None] = mapped_column(Text, nullable=True)
     gap_cash_in: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -141,9 +136,4 @@ class VisaoCliente(Base):
     pct_conta_global: Mapped[str | None] = mapped_column(Text, nullable=True)
     maior_progresso_pct: Mapped[str | None] = mapped_column(Text, nullable=True)
     criterio_proximo: Mapped[str | None] = mapped_column(Text, nullable=True)
-    ja_recebeu_comissao: Mapped[str | None] = mapped_column(Text, nullable=True)
-    comissao_prox_mes: Mapped[str | None] = mapped_column(Text, nullable=True)
     status_qualificacao: Mapped[str | None] = mapped_column(Text, nullable=True)
-    dias_desde_abertura: Mapped[str | None] = mapped_column(Text, nullable=True)
-    m2_dias_faltantes: Mapped[str | None] = mapped_column(Text, nullable=True)
-

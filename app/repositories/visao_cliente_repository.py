@@ -25,14 +25,6 @@ class VisaoClienteRepository:
         return func.upper(func.coalesce(column, "")).like(pattern)
 
     @staticmethod
-    def _safra_condition(value: str):
-        pattern = f"%{value.strip()}%"
-        return or_(
-            VisaoCliente.safra_maquina.ilike(pattern),
-            VisaoCliente.safra_boleto.ilike(pattern),
-        )
-
-    @staticmethod
     def _boletos_condition(value: str):
         pattern = f"%{value.strip()}%"
         return or_(
@@ -41,18 +33,14 @@ class VisaoClienteRepository:
             VisaoCliente.vl_bolcob_emtd_mtd.ilike(pattern),
             VisaoCliente.qtd_bolcob_liq_mtd.ilike(pattern),
             VisaoCliente.vl_bolcob_liq_mtd.ilike(pattern),
-            VisaoCliente.safra_boleto.ilike(pattern),
         )
 
     @staticmethod
     def _never_qualificou_condition():
-        ja_recebeu_upper = func.upper(func.coalesce(VisaoCliente.ja_recebeu_comissao, ""))
-        return and_(
-            ja_recebeu_upper.in_(["NAO", "NÃO", "NÃƒO"]),
-            or_(
-                VisaoCliente.fl_qualificado_comiss.is_(None),
-                not_(VisaoCliente.fl_qualificado_comiss.in_(["1", "1.0"])),
-            ),
+        # ja_recebeu_comissao foi removida do ETL — filtro baseado apenas em fl_qualificado_comiss
+        return or_(
+            VisaoCliente.fl_qualificado_comiss.is_(None),
+            not_(VisaoCliente.fl_qualificado_comiss.in_(["1", "1.0"])),
         )
 
     # ─── Busca individual ─────────────────────────────────────────────────────
@@ -140,7 +128,6 @@ class VisaoClienteRepository:
         q: Optional[str] = None,
         cnpj: Optional[str] = None,
         nome: Optional[str] = None,
-        safra: Optional[str] = None,
         safra_maquina: Optional[str] = None,
         nunca_qualificou: Optional[bool] = None,
         comissao_prox_mes: Optional[str] = None,
@@ -175,18 +162,15 @@ class VisaoClienteRepository:
         if nome:
             filters.append(self._contains(VisaoCliente.nome_cliente, nome))
 
-        if safra:
-            filters.append(self._safra_condition(safra))
-
         if safra_maquina:
-            filters.append(self._contains(VisaoCliente.safra_maquina, safra_maquina))
+            pass  # coluna removida do ETL — filtro desabilitado
 
         if nunca_qualificou is not None:
             condition = self._never_qualificou_condition()
             filters.append(condition if nunca_qualificou else not_(condition))
 
         if comissao_prox_mes:
-            filters.append(self._contains(VisaoCliente.comissao_prox_mes, comissao_prox_mes))
+            pass  # coluna removida do ETL — filtro desabilitado
 
         if apuracao_comiss:
             filters.append(self._contains(VisaoCliente.apuracao_comiss, apuracao_comiss))
@@ -203,10 +187,10 @@ class VisaoClienteRepository:
             filters.append(self._contains(VisaoCliente.chaves_pix_forte, chaves_pix_forte))
 
         if cancelamento_maq:
-            filters.append(self._contains(VisaoCliente.cancelamento_maq, cancelamento_maq))
+            pass  # coluna removida do ETL — filtro desabilitado
 
         if m2_dias_faltantes:
-            filters.append(self._contains(VisaoCliente.m2_dias_faltantes, m2_dias_faltantes))
+            pass  # coluna removida do ETL — filtro desabilitado
 
         if boletos:
             filters.append(self._boletos_condition(boletos))
