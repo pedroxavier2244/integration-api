@@ -18,12 +18,19 @@ def upgrade() -> None:
     # 1. Create schema
     op.execute("CREATE SCHEMA IF NOT EXISTS integration")
 
-    # 2. Grant permissions (tables + sequences)
-    op.execute("GRANT USAGE ON SCHEMA integration TO etl_user")
-    op.execute("GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA integration TO etl_user")
-    op.execute("GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA integration TO etl_user")
-    op.execute("ALTER DEFAULT PRIVILEGES IN SCHEMA integration GRANT ALL ON TABLES TO etl_user")
-    op.execute("ALTER DEFAULT PRIVILEGES IN SCHEMA integration GRANT USAGE, SELECT ON SEQUENCES TO etl_user")
+    # 2. Grant permissions (tables + sequences) — only if etl_user role exists
+    op.execute("""
+        DO $$
+        BEGIN
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'etl_user') THEN
+                GRANT USAGE ON SCHEMA integration TO etl_user;
+                GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA integration TO etl_user;
+                GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA integration TO etl_user;
+                ALTER DEFAULT PRIVILEGES IN SCHEMA integration GRANT ALL ON TABLES TO etl_user;
+                ALTER DEFAULT PRIVILEGES IN SCHEMA integration GRANT USAGE, SELECT ON SEQUENCES TO etl_user;
+            END IF;
+        END $$
+    """)
 
     # 3. Move integration tables
     op.execute("ALTER TABLE public.users                  SET SCHEMA integration")
