@@ -60,3 +60,4 @@ alembic/versions/__pycache__/
 # Scripts de deploy/exploração — contêm credenciais, nunca subir ao git
 ssh_deploy.py
 vps_explore.py
+scripts/smoke_test_vps.py
