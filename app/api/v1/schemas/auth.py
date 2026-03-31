@@ -21,6 +21,7 @@ class LoginResponse(BaseModel):
     refresh_token: str
     token_type: str = "Bearer"
     expires_in: int = 3600
+    must_change_password: bool = False
     user: "UserTokenInfo"
 
 
@@ -104,3 +105,24 @@ class ValidateTokenResponse(BaseModel):
     valid: bool
     email: Optional[str] = None
     type: Optional[str] = None
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("A senha deve ter no mínimo 8 caracteres.")
+        if not re.search(r"[A-Z]", v):
+            raise ValueError("A senha deve conter pelo menos uma letra maiúscula.")
+        if not re.search(r"[0-9]", v):
+            raise ValueError("A senha deve conter pelo menos um número.")
+        return v
+
+
+class ChangePasswordResponse(BaseModel):
+    success: bool = True
+    message: str = "Senha alterada com sucesso."

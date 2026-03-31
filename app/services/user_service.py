@@ -1,5 +1,4 @@
-import hashlib
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,8 +18,10 @@ from app.core.exceptions import (
     NotFoundException,
     ValidationException,
 )
-from app.core.security import create_email_token
+from app.core.security import create_email_token, hash_password
 from app.repositories.user_repository import UserRepository
+
+TEMP_PASSWORD = "Trocar@123"
 
 
 class UserService:
@@ -181,7 +182,6 @@ class UserService:
         created_by_id: str,
         gestor_id: Optional[str] = None,
     ) -> CreateUserResponse:
-        from app.integrations.email_client import send_invite_email
         from app.services.audit_service import AuditService
 
         repo = UserRepository(self.db)
@@ -205,16 +205,9 @@ class UserService:
             full_name=full_name.strip(),
             role=role.value,
             gestor_id=final_gestor_id,
+            hashed_password=hash_password(TEMP_PASSWORD),
+            must_change_password=True,
         )
-
-        token = create_email_token(user.id, "invite")
-        token_hash = hashlib.sha256(token.encode()).hexdigest()
-        expires_at = datetime.now(timezone.utc) + timedelta(
-            hours=settings.JWT_INVITE_TOKEN_EXPIRE_HOURS
-        )
-        await repo.save_reset_token(user.id, token_hash, expires_at)
-
-        await send_invite_email(user.email, user.full_name, token)
 
         await AuditService(self.db).log(
             action=AuditAction.user_created,

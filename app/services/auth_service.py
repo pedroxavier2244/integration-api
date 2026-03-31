@@ -91,6 +91,7 @@ class AuthService:
         return LoginResponse(
             access_token=access,
             refresh_token=refresh,
+            must_change_password=user.must_change_password,
             user=UserTokenInfo(
                 id=user.id,
                 email=user.email,
@@ -255,6 +256,30 @@ class AuthService:
             return {"valid": True, "email": user.email, "type": expected_type}
         except Exception:
             return {"valid": False, "email": None, "type": None}
+
+    async def change_password(
+        self, user_id: str, current_password: str, new_password: str
+    ) -> None:
+        from app.services.audit_service import AuditService
+        from app.core.security import hash_password
+
+        repo = UserRepository(self.db)
+        user = await self._get_active_user_or_raise(repo, user_id)
+
+        if not user.hashed_password or not verify_password(current_password, user.hashed_password):
+            raise UnauthorizedException(
+                code="AUTH_INVALID_CREDENTIALS",
+                message="Senha atual incorreta.",
+            )
+
+        await repo.set_password_and_clear_must_change(user_id, hash_password(new_password))
+        await repo.revoke_all_user_tokens(user_id)
+
+        await AuditService(self.db).log(
+            action=AuditAction.password_reset,
+            user_id=user_id,
+            user_email=user.email,
+        )
 
     async def get_me(self, payload: TokenPayload) -> MeResponse:
         user = await UserRepository(self.db).get_by_id(payload.sub)

@@ -15,6 +15,8 @@ from app.api.v1.schemas.auth import (
     ResetPasswordResponse,
     ValidateTokenRequest,
     ValidateTokenResponse,
+    ChangePasswordRequest,
+    ChangePasswordResponse,
 )
 from app.db.session import get_db
 from app.services.auth_service import AuthService
@@ -106,6 +108,24 @@ async def accept_invite(
 ):
     await AuthService(db).accept_invite(body.token, body.new_password)
     return ResetPasswordResponse(message="Senha definida com sucesso. Faça login para continuar.")
+
+
+@router.post(
+    "/change-password",
+    response_model=ChangePasswordResponse,
+    summary="Alterar senha (obrigatório no primeiro login)",
+)
+async def change_password(
+    body: ChangePasswordRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    await AuthService(db).change_password(
+        user_id=current_user.sub,
+        current_password=body.current_password,
+        new_password=body.new_password,
+    )
+    return ChangePasswordResponse()
 
 
 @router.post(

@@ -29,12 +29,16 @@ class UserRepository:
         full_name: str,
         role: str,
         gestor_id: Optional[str] = None,
+        hashed_password: Optional[str] = None,
+        must_change_password: bool = False,
     ) -> User:
         user = User(
             email=email,
             full_name=full_name,
             role=role,
             gestor_id=gestor_id,
+            hashed_password=hashed_password,
+            must_change_password=must_change_password,
         )
         self.db.add(user)
         await self.db.flush()
@@ -88,6 +92,17 @@ class UserRepository:
             .where(User.id == user_id)
             .values(
                 hashed_password=hashed_password,
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
+
+    async def set_password_and_clear_must_change(self, user_id: str, hashed_password: str) -> None:
+        await self.db.execute(
+            update(User)
+            .where(User.id == user_id)
+            .values(
+                hashed_password=hashed_password,
+                must_change_password=False,
                 updated_at=datetime.now(timezone.utc),
             )
         )
