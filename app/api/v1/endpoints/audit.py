@@ -33,4 +33,4 @@ async def list_audit_logs(
         date_from=date_from,
         date_to=date_to,
     )
-    return await AuditService(db).list_logs(params)
+    return await AuditService(db).list_logs(params, actor_id=current_user.sub, actor_role=current_user.role)

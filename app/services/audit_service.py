@@ -87,14 +87,30 @@ class AuditService:
             # Nao re-raise: audit nunca bloqueia o fluxo principal.
 
     async def list_logs(
-        self, params: AuditListParams
+        self, params: AuditListParams, actor_id: Optional[str] = None, actor_role: Optional[str] = None,
     ) -> PaginatedResponse[AuditLogResponse]:
         from app.repositories.audit_repository import AuditRepository
+        from app.repositories.user_repository import UserRepository
+
+        # Gestor ve apenas logs da propria equipe (ele + seus operadores)
+        user_ids = None
+        if actor_role == "gestor" and actor_id:
+            team_users, _ = await UserRepository(self.db).list_users(
+                page=1, page_size=500, gestor_id=actor_id
+            )
+            team_ids = [u.id for u in team_users]
+            team_ids.append(actor_id)
+            # se o filtro user_id foi passado, respeita apenas se estiver na equipe
+            if params.user_id:
+                user_ids = [params.user_id] if params.user_id in team_ids else []
+            else:
+                user_ids = team_ids
 
         logs, total = await AuditRepository(self.db).list_logs(
             page=params.page,
             page_size=params.page_size,
-            user_id=params.user_id,
+            user_id=params.user_id if user_ids is None else None,
+            user_ids=user_ids,
             action=params.action,
             resource=params.resource,
             date_from=params.date_from,

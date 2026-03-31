@@ -41,6 +41,7 @@ class AuditRepository:
         page: int = 1,
         page_size: int = 50,
         user_id: Optional[str] = None,
+        user_ids: Optional[List[str]] = None,
         action: Optional[str] = None,
         resource: Optional[str] = None,
         date_from: Optional[datetime] = None,
@@ -49,7 +50,11 @@ class AuditRepository:
         query = select(AuditLog)
         count_query = select(func.count()).select_from(AuditLog)
 
-        if user_id:
+        if user_ids is not None:
+            # escopo de equipe: filtra por lista de IDs
+            query = query.where(AuditLog.user_id.in_(user_ids))
+            count_query = count_query.where(AuditLog.user_id.in_(user_ids))
+        elif user_id:
             query = query.where(AuditLog.user_id == user_id)
             count_query = count_query.where(AuditLog.user_id == user_id)
         if action:
