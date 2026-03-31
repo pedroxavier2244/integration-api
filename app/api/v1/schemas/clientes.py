@@ -1,4 +1,4 @@
-from pydantic import BaseModel, computed_field
+from pydantic import BaseModel, Field, computed_field
 from typing import Optional, List
 from datetime import date, datetime
 
@@ -259,3 +259,20 @@ class EmpresaResponse(BaseModel):
     nome_consultor: Optional[str] = None
     cd_cpf_cnpj_consultor: Optional[str] = None
     model_config = {"from_attributes": True}
+
+
+class ClienteLoteRequest(BaseModel):
+    """Request para busca em lote de clientes por lista de CPF/CNPJ."""
+    documentos: List[str] = Field(..., min_length=1, max_length=100)
+    uf: Optional[str] = None
+    status_cc: Optional[str] = None
+    ramo_atuacao: Optional[str] = None
+    consultor: Optional[str] = None
+
+
+class ClienteLoteResponse(BaseModel):
+    """Resposta da busca em lote."""
+    found: List[ClienteDetailResponse]
+    not_found: List[str]
+    total_found: int
+    total_not_found: int

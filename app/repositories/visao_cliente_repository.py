@@ -54,6 +54,46 @@ class VisaoClienteRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_by_documentos(
+        self,
+        documentos: List[str],
+        uf: Optional[str] = None,
+        status_cc: Optional[str] = None,
+        ramo_atuacao: Optional[str] = None,
+        consultor: Optional[str] = None,
+    ) -> List[VisaoCliente]:
+        """Busca em lote por lista de CPF/CNPJ com filtros opcionais (AND)."""
+        query = select(VisaoCliente).where(
+            VisaoCliente.cd_cpf_cnpj_cliente.in_(documentos)
+        )
+        filters = []
+
+        if uf:
+            filters.append(
+                func.upper(func.coalesce(VisaoCliente.uf, "")) == uf.strip().upper()
+            )
+
+        if status_cc:
+            filters.append(
+                func.upper(func.coalesce(VisaoCliente.status_cc, "")) == status_cc.strip().upper()
+            )
+
+        if ramo_atuacao:
+            filters.append(self._contains(VisaoCliente.ramo_atuacao, ramo_atuacao))
+
+        if consultor:
+            pattern = f"%{consultor.strip().upper()}%"
+            filters.append(or_(
+                func.upper(func.coalesce(VisaoCliente.nome_consultor, "")).like(pattern),
+                VisaoCliente.cd_cpf_cnpj_consultor.ilike(f"%{consultor.strip()}%"),
+            ))
+
+        if filters:
+            query = query.where(*filters)
+
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
     async def get_change_history(
         self,
         documento: str,

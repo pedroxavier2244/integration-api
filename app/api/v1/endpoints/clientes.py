@@ -10,6 +10,7 @@ from app.api.v1.schemas.clientes import (
     ClienteConsultaItemResponse, ClienteConsultaResponse,
     ClienteHistoricoAlteracaoItemResponse, ClienteHistoricoAlteracoesResponse,
     ClienteListResponse, IndicadoresResponse,
+    ClienteLoteRequest, ClienteLoteResponse,
 )
 from app.api.v1.schemas.audit import AuditAction
 from app.db.session import get_db
@@ -287,6 +288,47 @@ async def get_cliente_historico_alteracoes(
         limit=limit,
         offset=offset,
         items=[ClienteHistoricoAlteracaoItemResponse.model_validate(i) for i in items],
+    )
+
+
+@router.post(
+    "/lote",
+    response_model=ClienteLoteResponse,
+    summary="Busca em lote de clientes por lista de CPF/CNPJ",
+)
+async def get_clientes_lote(
+    body: ClienteLoteRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user=RequireClientesRead,
+):
+    repo = VisaoClienteRepository(db)
+    found_items = await repo.get_by_documentos(
+        documentos=body.documentos,
+        uf=body.uf,
+        status_cc=body.status_cc,
+        ramo_atuacao=body.ramo_atuacao,
+        consultor=body.consultor,
+    )
+    found_docs = {item.cd_cpf_cnpj_cliente for item in found_items}
+    not_found = [doc for doc in body.documentos if doc not in found_docs]
+
+    await AuditService(db).log(
+        action=AuditAction.cliente_read,
+        user_id=current_user.sub,
+        payload={k: v for k, v in {
+            "total_documentos": len(body.documentos),
+            "uf": body.uf,
+            "status_cc": body.status_cc,
+            "ramo_atuacao": body.ramo_atuacao,
+            "consultor": body.consultor,
+        }.items() if v is not None},
+    )
+
+    return ClienteLoteResponse(
+        found=[ClienteDetailResponse.model_validate(i) for i in found_items],
+        not_found=not_found,
+        total_found=len(found_items),
+        total_not_found=len(not_found),
     )
 
 
